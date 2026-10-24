@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Neo</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+body{display:flex;align-items:center;justify-content:center}
+canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+#start{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#7fffd4;font:20px sans-serif;background:#000;z-index:2}
+#card{position:fixed;top:0;bottom:0;right:0;width:56vw;display:none;flex-direction:column;align-items:center;justify-content:center;color:#7fffd4;font-family:sans-serif;text-align:center;z-index:1}
+#card canvas{width:26vmin;height:26vmin}
+#ct{font-size:11vmin;font-weight:bold;margin:1vmin 0}
+.cl{font-size:4.8vmin;margin:0.8vmin 2vw;line-height:1.25}
+body.card{padding-right:56vw;box-sizing:border-box}
+@media (orientation:portrait){#card{top:50vh;left:0;width:auto}body.card{padding-right:0;padding-bottom:50vh}#card canvas{width:22vmin;height:22vmin}}
+#sub{position:fixed;left:4vw;right:4vw;bottom:5vh;text-align:center;color:#7fffd4;font:bold 4.2vmin sans-serif;text-shadow:0 0 6px #000;z-index:4;pointer-events:none;min-height:5vmin}
+#lvl{position:fixed;left:0;bottom:0;height:1.2vmin;width:0;background:#2a6;z-index:4;pointer-events:none}
+#heard{position:fixed;bottom:4px;left:6px;color:#2a6;font:11px monospace;z-index:3;display:none}
+#dbg{position:fixed;top:4px;left:6px;color:#7fffd4;font:11px monospace;z-index:3;display:none}
+</style></head><body>
+<canvas id="c" width="32" height="18"></canvas>
+<div id="start">แตะเพื่อปลุก Neo</div>
+<div id="card"><canvas id="ci" width="16" height="16"></canvas><div id="ct"></div><div id="cls"></div></div>
+<div id="sub"></div><div id="lvl"></div>
+<div id="dbg"></div><div id="heard"></div>
+<script>
+(function(){
+'use strict';
+var W=32,H=18,cv=document.getElementById('c'),g=cv.getContext('2d');
+var FG='#7fffd4',HT='#ff7aa8',CK='#ff9a9a';
+var DEBUG=/debug=1/.test(location.search),dbg=document.getElementById('dbg');
+if(DEBUG)dbg.style.display='block';
+
+/* ---------- เสียง ---------- */
+var SND={ // หมวด -> ไฟล์
+  greet:['cat_chirp_short','cat_meow_short_happy','mouse_squeak_short'],
+  happy:['cat_trill_med','dog_bark_short','cat_meow_short_happy'],
+  curious:['cat_meow_med_curious','mouse_squeak_med'],
+  startle:['cat_meow_short_startled','dog_bark_short'],
+  sleepy:['cat_meow_long_sleepy'],
+  other:['dog_bark_med','dog_yelp_long','mouse_squeak_long']
+};
+var NAMES=['cat_chirp_short','cat_meow_long_sleepy','cat_meow_med_curious','cat_meow_short_happy','cat_meow_short_startled','cat_purr_long','cat_purr_med','cat_trill_med','dog_bark_med','dog_bark_short','dog_yelp_long','mouse_squeak_long','mouse_squeak_med','mouse_squeak_short'];
+var ctx=null,analyser=null,buf={},voices=0,purrNode=null,adata=null;
+var micAn=null,mdata=null,micLevel=0,floor=0.01,sustained=0,quietUntil=0,spikeCool=0,replyCool=0;
+function rnd(a){return a[Math.random()*a.length|0]}
+function loadAll(){
+  NAMES.forEach(function(n){
+    var x=new XMLHttpRequest();x.open('GET','sounds/'+n+'.mp3');x.responseType='arraybuffer';
+    x.onload=function(){ctx.decodeAudioData(x.response,function(b){buf[n]=b},function(){})};
+    x.send();
+  });
+}
+function play(name,loop){
+  if(!ctx||!buf[name])return null;
+  var s=ctx.createBufferSource(),gn=ctx.createGain();
+  s.buffer=buf[name];s.loop=!!loop;
+  s.playbackRate.value=loop?1:(0.95+Math.random()*0.1); // เปลี่ยน pitch นิดหน่อยไม่ให้ซ้ำ
+  s.connect(gn);gn.connect(analyser);
+  gn.gain.value=loop?0:1;
+  s.start(0);
+  var h={src:s,gain:gn,done:false};
+  s.onended=function(){h.done=true;quietUntil=Date.now()+700;if(!loop)voices=Math.max(0,voices-1)};
+  if(!loop)voices++;
+  return h;
+}
+function level(){ // 0..2 จากความดังของเสียงที่กำลังเล่น
+  if(!analyser)return 0;
+  analyser.getByteTimeDomainData(adata);
+  var m=0,i,v;for(i=0;i<adata.length;i++){v=Math.abs(adata[i]-128)/128;if(v>m)m=v}
+  return m>0.25?2:m>0.07?1:0;
+}
+
+/* ---------- ไมค์: ฟังแค่ระดับความดัง ไม่ถอดคำ ไม่เก็บ/ส่งเสียง ---------- */
+var nativeMic=false,lastSelf=false;
+window.onNativeLevel=function(l){micLevel=l};
+window.onNativeState=function(s){
+  if(s==='rec'){showSub('ได้ยินเสียง…',0);setMood('listen',600)}
+  else if(s==='sending'){showSub('กำลังถอดเสียง…',0);setMood('curious',8000)}
+  else if(s==='denied')showSub('ไม่ได้รับสิทธิ์ไมค์',6000);
+  else if(s==='error')showSub('เปิดไมค์ไม่ได้',6000);
+  else if(s==='neterr'){moodUntil=0;showSub('ติดต่อ Mac ไม่ได้',4000)}
+};
+window.onNativeText=function(t){moodUntil=0;if(t&&t.length>1)onSpeech(t);else showSub('(ไม่ได้ยินเป็นคำพูด)',2500)};
+window.onNativeLoud=function(){if(Date.now()>spikeCool){wake();say('startle','startle',900);spikeCool=Date.now()+3000}};
+function initMic(){
+  if(window.Android){nativeMic=true;sttOn=true;Android.startMic();return}
+  var gum=(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?function(c){return navigator.mediaDevices.getUserMedia(c)}:null;
+  if(!gum)return;
+  gum({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:false}}).then(function(st){
+    var src=ctx.createMediaStreamSource(st);
+    micAn=ctx.createAnalyser();micAn.fftSize=1024;src.connect(micAn); // ไม่ต่อออกลำโพง
+    mdata=new Uint8Array(micAn.fftSize);
+    if(!/[?&]nostt=1/.test(location.search))startRecorder(st);
+  },function(){});
+}
+function micTick(now){
+  if(!micAn)return;
+  micAn.getByteTimeDomainData(mdata);
+  var i,v,s=0;for(i=0;i<mdata.length;i++){v=(mdata[i]-128)/128;s+=v*v}
+  var rms=Math.sqrt(s/mdata.length);micLevel=rms;
+  if(voices>0||purrNode||now<quietUntil){sustained=0;return} // ไม่ฟังเสียงตัวเอง
+  if(rms<floor*1.5+0.02)floor+=(rms-floor)*0.02;           // ปรับพื้นเสียงห้อง
+  var over=rms-floor;
+  if(over>0.2&&now>spikeCool){wake();say('startle','startle',900);spikeCool=now+3000;sustained=0;return}
+  if(over>0.04){
+    sustained++;
+    if(sustained>=4){lastTouch=now;if(asleep)wake();else setMood('listen',300)}
+  }else{
+    if(sustained>=10&&now>replyCool&&!asleep&&!sttOn&&!rec){
+      if(Math.random()<0.6)say('curious','curious',1400);else say('greet','happy',1000);
+      replyCool=now+8000;
+    }
+    sustained=0;
+  }
+}
+
+/* ---------- ถาม-ตอบ: เสียงพูด → Mac (อากาศ/Claude Code) → การ์ด 15 วิ ---------- */
+var ICONS={ // 16x16 pixel art
+ sun:['................','.......#........','...#...#...#....','....#.....#.....','.......##.......','..#...####...#..','.....######.....','.##..######..##.','.....######.....','..#...####...#..','.......##.......','....#.....#.....','...#...#...#....','.......#........','................','................'],
+ cloud:['................','................','......###.......','.....#####..##..','....#######.###.','...############.','..##############','..##############','..##############','...############.','................','................','................','................','................','................'],
+ rain:['................','......###.......','.....#####..##..','....#######.###.','...############.','..##############','..##############','...############.','................','...#...#...#....','..#...#...#.....','.#...#...#......','................','................','................','................'],
+ storm:['................','......###.......','.....#####..##..','....#######.###.','...############.','..##############','...############.','.......##.......','......##........','.....####.......','.......##.......','......##........','.....#..........','................','................','................'],
+ fog:['................','................','................','..############..','................','....#########...','................','..############..','................','....#########...','................','..############..','................','................','................','................'],
+ text:['................','................','..############..','..#..........#..','..#.########.#..','..#..........#..','..#.########.#..','..#..........#..','..#.#####....#..','..#..........#..','..############..','.......##.......','......##........','.....##.........','................','................']
+};
+var subEl=document.getElementById('sub'),lvlEl=document.getElementById('lvl'),subT=null;
+function showSub(t,ms){subEl.textContent=t;if(subT)clearTimeout(subT);if(ms)subT=setTimeout(function(){subEl.textContent=''},ms)}
+var cardEl=document.getElementById('card'),cardT=null,thinking=false,reqTok=0;
+function drawIcon(n){
+  var c=document.getElementById('ci').getContext('2d'),a=ICONS[n]||ICONS.text;
+  c.fillStyle='#000';c.fillRect(0,0,16,16);c.fillStyle=FG;
+  for(var y=0;y<16;y++)for(var x=0;x<16;x++)if(a[y].charAt(x)==='#')c.fillRect(x,y,1,1);
+}
+function clean(t){return String(t==null?'':t).replace(/[\uD800-\uDFFF\u2600-\u27BF\uFE0F]/g,'').trim()}
+function hideCard(){
+  if(cardT){clearTimeout(cardT);cardT=null}
+  cardEl.style.display='none';document.body.classList.remove('card');fit();
+}
+function showCard(c){
+  hideCard();
+  drawIcon(c.kind==='weather'?c.icon:'text');
+  document.getElementById('ct').textContent=clean(c.title);
+  var ls=document.getElementById('cls');ls.innerHTML='';
+  (c.lines||[]).slice(0,3).forEach(function(l){var d=document.createElement('div');d.className='cl';d.textContent=clean(l);ls.appendChild(d)});
+  cardEl.style.display='flex';document.body.classList.add('card');fit();
+  lastTouch=Date.now();
+  var sec=Math.min(15,c.seconds||15);cardT=setTimeout(hideCard,sec*1000);
+  // ร้องเบา ๆ เหมือนอ่านให้ฟัง
+  var sn=(c.sounds&&c.sounds.length)?c.sounds:['greet'];
+  sn.slice(0,3).forEach(function(cat,i){
+    setTimeout(function(){if(cardT&&SND[cat]){play(rnd(SND[cat]),false);setMood(c.emotion||'happy',1200)}},i*1100);
+  });
+}
+function ask(text){
+  var tok=++reqTok;thinking=true;hideCard();wake();setMood('curious',20000);
+  var x=new XMLHttpRequest();x.open('POST','/api/ask');x.timeout=35000;
+  x.onload=function(){
+    if(tok!==reqTok)return;thinking=false;
+    try{var c=JSON.parse(x.responseText);if(x.status===200){showCard(c);return}}catch(e){}
+    if(x.status!==409){say('curious','curious',1200)}
+  };
+  x.onerror=x.ontimeout=function(){if(tok!==reqTok)return;thinking=false;moodUntil=0;say('startle','startle',900)};
+  x.send(JSON.stringify({text:text}));
+}
+// STT: Web Speech API ของ Chrome (ส่งเสียงไป Google ถอดเป็นข้อความ) — ต้องพูดชื่อ "โมจิ" นำ
+var rec=null,armedUntil=0,heardEl=document.getElementById('heard'),recOK=false;
+var WAKE=/นี\s?โอ|นิ\s?โอ|นีโอ|เนโอ|นีโย|\bneo\b|\bnio\b|nee\s?o/i; // ชื่อน้อง: Neo (Whisper ไทยมักถอดเป็น นีโอ)
+function onSpeech(t){
+  showSub('\u201c'+t+'\u201d',6000);
+  if(DEBUG){heardEl.style.display='block';heardEl.textContent='heard: '+t}
+  var now=Date.now(),m=t.match(WAKE);
+  if(m){
+    var q=(t.slice(m.index+m[0].length)).replace(/^[\s,.\u0e2f]+/,'').trim();
+    if(q.length<2){armedUntil=now+8000;wake();setMood('listen',2500);play(rnd(SND.greet),false);return}
+    ask(q);
+  }else if(now<armedUntil){armedUntil=0;ask(t)}
+}
+function initRec(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)return;
+  rec=new SR();rec.lang='th-TH';rec.continuous=true;rec.interimResults=false;rec.maxAlternatives=1;
+  rec.onresult=function(e){for(var i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)onSpeech(e.results[i][0].transcript)};
+  rec.onerror=function(e){if(DEBUG)heardEl.textContent='asr error: '+e.error};
+  rec.onend=function(){if(recOK)setTimeout(function(){try{rec.start()}catch(e){}},400)};
+  recOK=true;try{rec.start()}catch(e){}
+}
+
+/* ---------- อัดเสียงช่วงพูด → Mac ถอดเสียงด้วย whisper (ไม่พึ่ง Google) ---------- */
+var sttOn=false,proc=null,pre=[],seg=null,quiet=0,sttBusy=false,pending=null;
+function startRecorder(stream){
+  var src=ctx.createMediaStreamSource(stream);
+  proc=ctx.createScriptProcessor(4096,1,1);
+  var mute=ctx.createGain();mute.gain.value=0;
+  src.connect(proc);proc.connect(mute);mute.connect(ctx.destination);
+  var fl=0.01,MAXC=Math.ceil(12*ctx.sampleRate/4096),PRE=Math.ceil(0.6*ctx.sampleRate/4096),QUIET=Math.ceil(0.9*ctx.sampleRate/4096);
+  proc.onaudioprocess=function(e){
+    var d=e.inputBuffer.getChannelData(0),i,s=0;for(i=0;i<d.length;i++)s+=d[i]*d[i];
+    var r=Math.sqrt(s/d.length),copy=new Float32Array(d);
+    if(voices>0||purrNode||Date.now()<quietUntil){seg=null;pre=[];quiet=0;return} // ไม่อัดเสียงตัวเอง
+    if(r<fl*1.5+0.01)fl+=(r-fl)*0.02;
+    var loud=r>fl+0.03;
+    if(!seg){
+      pre.push(copy);if(pre.length>PRE)pre.shift();
+      if(loud){seg=pre.slice();pre=[];quiet=0;showSub('ได้ยินเสียง…',0)}
+    }else{
+      seg.push(copy);quiet=(r>fl+0.02)?0:quiet+1;
+      if(seg.length>=MAXC||quiet>=QUIET){var out=seg;seg=null;quiet=0;if(out.length>QUIET+PRE/2)sendSeg(out)}
+      else setMood('listen',300);
+    }
+  };
+  sttOn=true;
+}
+function toWav(chunks){
+  var n=0,i,j;chunks.forEach(function(c){n+=c.length});
+  var ratio=ctx.sampleRate/16000,m=Math.floor(n/ratio),all=new Float32Array(n),o=0;
+  chunks.forEach(function(c){all.set(c,o);o+=c.length});
+  var buf=new ArrayBuffer(44+m*2),v=new DataView(buf);
+  function ws(p,t){for(var k=0;k<t.length;k++)v.setUint8(p+k,t.charCodeAt(k))}
+  ws(0,'RIFF');v.setUint32(4,36+m*2,true);ws(8,'WAVE');ws(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);ws(36,'data');v.setUint32(40,m*2,true);
+  for(i=0;i<m;i++){var a=Math.floor(i*ratio),b=Math.floor((i+1)*ratio),acc=0;for(j=a;j<b;j++)acc+=all[j];var x=acc/(b-a||1);x=Math.max(-1,Math.min(1,x*2)); // ขยาย 2 เท่า
+    v.setInt16(44+i*2,x<0?x*0x8000:x*0x7fff,true)}
+  return buf;
+}
+function sendSeg(chunks){
+  if(sttBusy){return}
+  sttBusy=true;setMood('curious',8000);showSub('กำลังถอดเสียง…',0);
+  var x=new XMLHttpRequest();x.open('POST','/api/stt');x.timeout=30000;x.setRequestHeader('Content-Type','audio/wav');
+  x.onload=function(){sttBusy=false;moodUntil=0;
+    try{var t=JSON.parse(x.responseText).text;if(t&&t.length>1)onSpeech(t);else showSub('(ไม่ได้ยินเป็นคำพูด)',2500)}catch(e){showSub('ถอดเสียงไม่สำเร็จ',2500)}};
+  x.onerror=x.ontimeout=function(){sttBusy=false;moodUntil=0;showSub('ติดต่อ Mac ไม่ได้',3000)};
+  x.send(toWav(chunks));
+}
+
+/* ---------- ใบหน้า ---------- */
+var face={mood:'idle'}; // mood: idle sleepy happy startle curious
+var frame=0,blinkAt=40,blinkT=0,lookX=0,lookAt=60,pleasure=0,hearts=[],moodUntil=0;
+var lastTouch=Date.now(),nextIdleSound=Date.now()+20000,asleep=false;
+function px(x,y,c){g.fillStyle=c||FG;g.fillRect(x,y,1,1)}
+function rect(x,y,w,h,c){g.fillStyle=c||FG;g.fillRect(x,y,w,h)}
+function eye(cx,kind,dx){
+  var x=cx-3+dx,y=4;
+  if(kind==='open'){rect(x,y,6,8);rect(x+1,y+1,1,1,'#000')}
+  else if(kind==='big'){rect(x-1,y-1,8,10);px(x+1,y+1,'#000');px(x+2,y+1,'#000')}
+  else if(kind==='blink'){rect(x,y+4,6,1)}
+  else if(kind==='happy'){px(x,y+5);px(x+1,y+4);px(x+2,y+3);px(x+3,y+3);px(x+4,y+4);px(x+5,y+5)}
+  else if(kind==='close'){px(x,y+3);px(x+1,y+4);px(x+2,y+5);px(x+3,y+5);px(x+4,y+4);px(x+5,y+3)}
+  else if(kind==='up'){rect(x,y,6,7);rect(x+2,y,2,2,'#000')}
+  else if(kind==='sleepy'){rect(x,y+5,6,3);rect(x,y+5,6,1)}
+}
+function mouth(kind){
+  var cx=16,y=14;
+  if(kind==='line'){rect(cx-3,y,6,1);px(cx-4,y-1);px(cx+3,y-1)}
+  else if(kind==='o'){rect(cx-1,y-1,3,3)}
+  else if(kind==='big'){rect(cx-4,y-1,8,1);rect(cx-3,y,6,2)}
+  else if(kind==='tiny'){rect(cx-2,y,4,1);px(cx-3,y-1);px(cx+2,y-1)}
+  else if(kind==='talk0'){rect(cx-3,y,6,1)}
+  else if(kind==='talk1'){rect(cx-3,y-1,6,3)}
+  else if(kind==='talk2'){rect(cx-4,y-1,8,4)}
+  else if(kind==='yawn'){rect(cx-2,y-1,4,4)}
+}
+function heart(x,y){[[1,0],[3,0],[0,1],[1,1],[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[2,3]].forEach(function(p){px(x+p[0],y+p[1],HT)})}
+function draw(){
+  lvlEl.style.width=Math.min(100,((micAn||nativeMic)?micLevel:0)*600)+'%';
+  g.fillStyle='#000';g.fillRect(0,0,W,H);
+  var e='open',m='line',dx=0,lv=voices>0?level():-1,mood=face.mood,bliss=pleasure>0.15;
+  if(Date.now()>moodUntil&&!asleep)mood='idle';
+  if(bliss){e=pleasure>0.5?'close':'happy';m='tiny';if(lv>=0)m=['talk0','talk1','talk2'][lv]}
+  else if(asleep){e='sleepy';m=(frame>>4)&1?'yawn':'tiny'}
+  else{
+    if(mood==='idle'){dx=lookX;if(blinkT>0)e='blink'}
+    else if(mood==='happy'){e='happy';m='big'}
+    else if(mood==='startle'){e='big';m='o'}
+    else if(mood==='curious'){e='up';m='line'}
+    else if(mood==='listen'){e='big';m='o'}
+    if(lv>=0)m=['talk0','talk1','talk2'][lv];
+  }
+  eye(9,e,dx);eye(23,e,dx);mouth(m);
+  if(bliss&&pleasure>0.5){rect(4,11,3,1,CK);rect(25,11,3,1,CK)}
+  hearts.forEach(function(h){heart(h.x|0,h.y|0)});
+  if(DEBUG)dbg.textContent='mood:'+mood+' asleep:'+asleep+' pleasure:'+pleasure.toFixed(2)+' voices:'+voices+' buf:'+Object.keys(buf).length+' mic:'+(micAn?micLevel.toFixed(3)+'/floor '+floor.toFixed(3)+' sus:'+sustained:'off');
+}
+function setMood(m,ms){face.mood=m;moodUntil=Date.now()+ms}
+function say(cat,mood,ms){
+  var n=rnd(SND[cat]);play(n,false);setMood(mood,ms||1200);
+}
+
+/* ---------- พฤติกรรม ---------- */
+function wake(){
+  lastTouch=Date.now();nextIdleSound=lastTouch+20000+Math.random()*30000;
+  if(asleep){asleep=false;say('greet','happy',1500);return true}
+  return false;
+}
+function updatePurr(){
+  if(pleasure>0.5&&!purrNode&&ctx&&buf.cat_purr_long){
+    purrNode=play('cat_purr_long',true);
+    if(purrNode)purrNode.gain.gain.linearRampToValueAtTime(0.9,ctx.currentTime+0.6);
+  }
+  if(pleasure<0.12&&purrNode){
+    var p=purrNode;purrNode=null;
+    p.gain.gain.cancelScheduledValues(ctx.currentTime);
+    p.gain.gain.setValueAtTime(p.gain.gain.value,ctx.currentTime);
+    p.gain.gain.linearRampToValueAtTime(0,ctx.currentTime+0.4);
+    setTimeout(function(){try{p.src.stop()}catch(e){}},500);
+    setMood('happy',1500);
+  }
+}
+function tick(){
+  frame++;var now=Date.now();
+  if(frame>=blinkAt){blinkT=2;blinkAt=frame+30+(Math.random()*50|0)}
+  if(blinkT>0)blinkT--;
+  if(frame>=lookAt){lookX=[-1,0,1][Math.random()*3|0];lookAt=frame+40+(Math.random()*60|0)}
+  pleasure=Math.max(0,pleasure-0.012);
+  if(pleasure>0.5&&frame%14===0&&hearts.length<3)hearts.push({x:12+Math.random()*8,y:3});
+  hearts.forEach(function(h){h.y-=0.12});hearts=hearts.filter(function(h){return h.y>-4});
+  updatePurr();micTick(now);
+  var selfNow=voices>0||!!purrNode;if(nativeMic&&selfNow!==lastSelf){lastSelf=selfNow;Android.setSelfSound(selfNow)}
+  if(!asleep&&pleasure<0.15){
+    if(now-lastTouch>150000){asleep=true;play('cat_meow_long_sleepy',false)}
+    else if(now>nextIdleSound){
+      var r=Math.random();
+      if(r<0.4)say('curious','curious',1400);else if(r<0.75)say('greet','happy',1000);else say('happy','happy',1000);
+      nextIdleSound=now+25000+Math.random()*35000;
+    }
+  }
+  draw();
+}
+
+/* ---------- สัมผัส ---------- */
+var last=null,startPt=null,moved=0;
+function down(e){
+  if(!ctx)return;
+  last=startPt={x:e.clientX,y:e.clientY,t:performance.now()};moved=0;
+  if(wake())startPt=null; // ปลุกอยู่ ไม่นับเป็นแตะ
+}
+function move(e){
+  if(!last)return;
+  var now=performance.now(),dt=(now-last.t)/1000||0.016;
+  var d=Math.hypot(e.clientX-last.x,e.clientY-last.y),v=d/dt;
+  moved+=d;
+  if(v>20&&v<500&&moved>12){pleasure=Math.min(1,pleasure+d/600);lastTouch=Date.now();asleep=false}
+  last={x:e.clientX,y:e.clientY,t:now};
+}
+function up(){
+  if(startPt&&moved<12&&performance.now()-startPt.t<350&&cardT){hideCard();last=startPt=null;return}
+  if(startPt&&moved<12&&performance.now()-startPt.t<350&&pleasure<0.15){
+    // แตะเร็ว ๆ = ทัก/สะดุ้ง
+    if(Math.random()<0.5)say('startle','startle',700);else say('greet','happy',1000);
+  }
+  last=startPt=null;
+}
+document.addEventListener('pointerdown',down);
+document.addEventListener('pointermove',move);
+document.addEventListener('pointerup',up);
+document.addEventListener('pointercancel',function(){last=startPt=null});
+document.addEventListener('contextmenu',function(e){e.preventDefault()});
+
+/* ---------- เริ่ม/ขนาด/ระบบ ---------- */
+function fit(){
+  var cd=document.body.classList.contains('card'),port=innerHeight>innerWidth,aw=innerWidth*(cd&&!port?0.44:1),ah=innerHeight*(cd&&port?0.5:1);
+  var s=Math.min(aw/W,ah/H);
+  cv.style.width=(W*s)+'px';cv.style.height=(H*s)+'px';
+}
+addEventListener('resize',fit);fit();
+var wl=null;
+function lockWake(){
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){wl=l},function(){})}catch(e){}
+}
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&ctx)lockWake()});
+document.getElementById('start').addEventListener('pointerdown',function(ev){
+  ev.stopPropagation();
+  var AC=window.AudioContext||window.webkitAudioContext;
+  ctx=new AC();if(ctx.resume)ctx.resume();
+  analyser=ctx.createAnalyser();analyser.fftSize=512;analyser.connect(ctx.destination);
+  adata=new Uint8Array(analyser.fftSize);
+  loadAll();initMic();if(/[?&]asr=1/.test(location.search))setTimeout(initRec,1500); // ปิดไว้ก่อน: Web Speech ทำไมค์เปิด-ปิดวน
+  var qm=location.search.match(/[?&]ask=([^&]+)/);if(qm)setTimeout(function(){ask(decodeURIComponent(qm[1]))},2500); // ทดสอบการ์ดโดยไม่ต้องพูด
+  this.style.display='none';
+  var el=document.documentElement;
+  try{var fp=(el.requestFullscreen||el.webkitRequestFullscreen).call(el);if(fp&&fp.catch)fp.catch(function(){})}catch(e){}
+  try{screen.orientation.lock('landscape').catch(function(){})}catch(e){}
+  lockWake();
+  lastTouch=Date.now();
+  setTimeout(function(){say('greet','happy',1500)},800);
+  if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(function(){});
+});
+setInterval(tick,100); // 10 fps
+draw();
+})();
+</script></body></html>

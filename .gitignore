@@ -1,0 +1,8 @@
+models/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+voice-samples/**/*.wav
+.DS_Store
