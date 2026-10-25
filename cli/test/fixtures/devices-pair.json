@@ -1,0 +1,16 @@
+{
+  "code": "123456",
+  "expiresAt": 1700000300000,
+  "addresses": [
+    {
+      "method": "USB",
+      "url": "http://localhost:8100",
+      "note": "adb reverse tcp:8100 tcp:8100 แล้วกด \"ใช้สาย USB\" บนมือถือ (ยังต้องจับคู่)"
+    },
+    {
+      "method": "URL ของคุณเอง",
+      "url": "https://…",
+      "note": "tunnel/reverse proxy ที่ชี้มา http://127.0.0.1:8100 (ต้องใช้รหัส)"
+    }
+  ]
+}

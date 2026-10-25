@@ -1,0 +1,16 @@
+{
+  "name": "neo-cli",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "build": "bash tools/build.sh",
+    "typecheck": "bunx tsc --noEmit",
+    "gen:kotlin": "bun tools/gen-kotlin.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest",
+    "typescript-js": "npm:typescript@5.9.3"
+  }
+}

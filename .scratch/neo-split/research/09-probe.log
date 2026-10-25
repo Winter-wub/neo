@@ -1,0 +1,6 @@
+{"at":"2026-10-25T08:51:23.359Z","mode":"A-plist","ppid":1,"r":{"fda_tccdb":"EPERM","fda_mail":"EPERM","desktop":"ok","documents":"ok","downloads":"ok","child_ls_desktop":"ok"}}
+{"at":"2026-10-25T08:53:17.070Z","mode":"A-plist","ppid":1,"r":{"fda_tccdb":"ok","fda_mail":"ok","desktop":"ok","documents":"ok","downloads":"ok","child_ls_desktop":"ok"}}
+{"at":"2026-10-25T08:53:29.335Z","mode":"A-plist-rebuilt","ppid":1,"r":{"fda_tccdb":"ok","fda_mail":"ok","desktop":"ok","documents":"ok","downloads":"ok","child_ls_desktop":"ok"}}
+{"at":"2026-10-25T08:54:37.057Z","mode":"A-plist-rebuilt","ppid":1,"r":{"fda_tccdb":"EPERM","fda_mail":"EPERM","desktop":"ok","documents":"ok","downloads":"ok","child_ls_desktop":"ok"}}
+{"at":"2026-10-25T08:56:03.924Z","mode":"B-SMAppService-rebuilt","ppid":1,"r":{"fda_tccdb":"EPERM","fda_mail":"EPERM","desktop":"ok","documents":"ok","downloads":"ok","child_ls_desktop":"ok"}}
+{"at":"2026-10-25T08:59:32.476Z","mode":"B-SMAppService-rebuilt","ppid":1,"r":{"fda_tccdb":"ok","fda_mail":"ok","desktop":"ok","documents":"ok","downloads":"ok","child_ls_desktop":"ok"}}

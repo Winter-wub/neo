@@ -1,0 +1,15 @@
+{
+  "jobs": [
+    {
+      "id": "a1b2c3d4",
+      "kind": "alarm",
+      "title": "ปลุก",
+      "enabled": true,
+      "at": 1700025200000,
+      "next": 1700025200000,
+      "when": "พรุ่งนี้ 05:30"
+    }
+  ],
+  "ringing": null,
+  "problems": []
+}

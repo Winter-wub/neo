@@ -1,0 +1,20 @@
+{
+  "type": "card",
+  "card": {
+    "kind": "text",
+    "layout": "text",
+    "icon": "search",
+    "title": "คำตอบ",
+    "lines": [
+      "ตอบ: ข่าววันนี้มีอะไร",
+      "ที่มา BBC"
+    ],
+    "emotion": "happy",
+    "sounds": [
+      "happy"
+    ],
+    "seconds": 20,
+    "items": []
+  },
+  "at": 1700000000000
+}

@@ -1,0 +1,19 @@
+{
+  "current": "claude",
+  "list": [
+    {
+      "name": "claude",
+      "label": "Claude Code",
+      "type": "claude-code",
+      "found": true,
+      "model": null
+    },
+    {
+      "name": "fakeagent",
+      "label": "Fake Agent",
+      "type": "acp",
+      "found": true,
+      "model": null
+    }
+  ]
+}

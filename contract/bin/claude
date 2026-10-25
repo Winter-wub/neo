@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+// Fake `claude` for the Neo contract suite. Self-contained: no dependencies, plain Node-compatible JS,
+// so both the old Node backend and NeoCli can spawn it. It never talks to the network or spends quota.
+//
+// Behaviour (what `claude -p --output-format stream-json --verbose` prints):
+//   {"type":"system","subtype":"init","session_id":…}
+//   {"type":"assistant","message":{"content":[{"type":"tool_use",…}]}}      (only with @tool:<Name>)
+//   {"type":"result","subtype":"success","result":"<one-line card JSON>","session_id":…}
+//
+// The prompt arrives on stdin. The reply is chosen by directives found anywhere in the prompt text:
+//   @card:<name>      ping | long | list | big | pixel | echo (default)
+//   @intent:schedule  reply with a schedule intent (an alarm one hour from now)
+//   @intent:skill     reply with a skill intent (its task carries `@card:echo`)
+//   @tool:<Name>      first emit a tool_use block named <Name>
+//   @slow             wait 60 s before answering (a SIGTERM kills it: use this to test cancel)
+//   @fail             exit 1 without a result line
+// A dream prompt (it contains "memory defragmentation") gets a dream JSON reply instead.
+//
+// Env: FAKE_CLAUDE_LOG=<file>  append one JSON line per invocation: {event:"call", pid, argv, prompt, session}
+//                              and {event:"sigterm", pid} when killed.
+//      FAKE_CLAUDE_SLOW_MS     override the @slow wait.
+'use strict';
+const fs = require('fs'), crypto = require('crypto');
+
+const argv = process.argv.slice(2);
+const log = o => { if (process.env.FAKE_CLAUDE_LOG) try { fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ ...o, pid: process.pid }) + '\n'); } catch {} };
+const out = o => process.stdout.write(JSON.stringify(o) + '\n');
+
+if (argv.includes('--version')) { console.log('0.0.0-fake (Claude Code)'); process.exit(0); }
+
+const resumeAt = argv.indexOf('--resume');
+const session = resumeAt >= 0 ? argv[resumeAt + 1] : 'fake-' + crypto.randomUUID();
+
+process.on('SIGTERM', () => { log({ event: 'sigterm' }); process.exit(143); });
+
+let prompt = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', d => { prompt += d; });
+process.stdin.on('end', () => main().catch(e => { console.error(e); process.exit(2); }));
+
+const pad = n => String(n).padStart(2, '0');
+const localMinute = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const card = o => ({ layout: 'text', icon: 'text', title: 'fake', big: '', lines: [], items: [], emotion: 'happy', sounds: ['happy'], seconds: 15, ...o });
+
+function reply(name, text) {
+  switch (name) {
+    case 'ping': return card({ title: 'ping', lines: ['ping'] });
+    case 'long': return card({ title: 'หัวข้อยาวมากเกินสามสิบตัวอักษรแน่นอนครับท่าน', big: 'ค่าใหญ่ยาวเกินสิบสี่ตัว', lines: Array.from({ length: 20 }, (_, i) => `บรรทัดที่ ${i + 1} ` + 'ก'.repeat(60)), seconds: 500 });
+    case 'list': return card({ layout: 'list', title: 'รายการ', items: [{ t: 'ข้อหนึ่ง', v: '1' }, { t: 'ข้อสอง', v: '2' }] });
+    case 'big': return card({ layout: 'big', title: 'ค่า', big: '42', lines: ['คำตอบ'] });
+    case 'pixel': return { layout: 'pixel', title: 'ภาพ', w: 4, h: 4, palette: { g: '#00ff00' }, frames: [['gggg', 'g..g', 'g..g', 'gggg']], fps: 2, seconds: 20, emotion: 'proud', sounds: ['happy'] };
+    default: return card({ title: 'ตอบแล้ว', lines: ['echo: ' + text.slice(0, 30)] });
+  }
+}
+
+async function main() {
+  log({ event: 'call', argv, prompt, session });
+  const dir = name => (prompt.match(new RegExp('@' + name + ':([A-Za-z0-9_-]+)')) || [])[1];
+  const has = name => new RegExp('@' + name + '(?![A-Za-z0-9_:-])').test(prompt);
+  out({ type: 'system', subtype: 'init', session_id: session, model: 'fake' });
+  if (has('fail')) process.exit(1);
+  if (has('slow')) await new Promise(r => setTimeout(r, +process.env.FAKE_CLAUDE_SLOW_MS || 60000));
+  const tool = dir('tool');
+  if (tool) out({ type: 'assistant', session_id: session, message: { content: [{ type: 'tool_use', id: 'tu_1', name: tool, input: { query: 'fake' } }] } });
+
+  let result;
+  if (/memory defragmentation/.test(prompt)) {
+    result = { memory: '## ผู้ใช้\n- ชอบแมวทดสอบระบบ\n- ทำงานด้านสัญญาหลังบ้าน', insights: [{ q: 'ทดสอบ', finding: 'ไม่มีอะไรเพิ่ม' }], patterns: ['ถามตอนเช้า'], dream: 'ฝันถึงปลาทอง', card: { title: 'ฝันแล้ว', lines: ['ฝันถึงปลาทอง'] } };
+  } else if (dir('intent') === 'schedule') {
+    result = { intent: 'schedule', kind: 'alarm', title: 'ทดสอบปลุก', at: localMinute(Date.now() + 3600e3) };
+  } else if (dir('intent') === 'skill') {
+    result = { intent: 'skill', skill: 'demo', plan: 'ทำเดโมให้ดู', task: 'ทำเดโม @card:echo' };
+  } else {
+    result = reply(dir('card') || 'echo', (prompt.match(/ว่า: "([^"]*)"/) || [, prompt])[1]);
+  }
+  out({ type: 'assistant', session_id: session, message: { content: [{ type: 'text', text: 'ok' }] } });
+  out({ type: 'result', subtype: 'success', is_error: false, session_id: session, result: JSON.stringify(result) });
+}

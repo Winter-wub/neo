@@ -1,0 +1,9 @@
+[
+  {
+    "name": "fakeagent",
+    "label": "Fake Agent",
+    "type": "acp",
+    "available": true,
+    "via": "PATH fake"
+  }
+]

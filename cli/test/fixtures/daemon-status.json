@@ -1,0 +1,26 @@
+{
+  "label": "com.mochi.neo",
+  "installed": true,
+  "loaded": true,
+  "running": true,
+  "pid": 777,
+  "version": "0.1.0",
+  "build": "b1",
+  "protocol": 1,
+  "binary": "<app>/Contents/MacOS/neo",
+  "plist": {
+    "path": "<LaunchAgents>/com.mochi.neo.plist",
+    "binary": "<app>/Contents/MacOS/neo",
+    "current": true
+  },
+  "symlink": {
+    "path": "<bin>/neo",
+    "target": "<app>/Contents/MacOS/neo",
+    "current": true
+  },
+  "home": "<home>",
+  "logs": {
+    "daemon": "<Logs>/Neo/daemon.log",
+    "crash": "<Logs>/Neo/daemon.crash.log"
+  }
+}

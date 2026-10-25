@@ -1,0 +1,6 @@
+{
+  "type": "provider",
+  "name": "fakeagent",
+  "label": "Fake Agent",
+  "at": 1700000000000
+}

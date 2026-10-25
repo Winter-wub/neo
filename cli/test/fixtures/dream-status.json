@@ -1,0 +1,52 @@
+{
+  "enabled": true,
+  "running": false,
+  "last": {
+    "id": "2026-10-25-2200",
+    "at": 0,
+    "reason": "สั่งให้ฝัน",
+    "took": 0,
+    "entries": 1,
+    "dream": "ฝันถึงปลาทอง",
+    "insights": 1,
+    "undelivered": true
+  },
+  "why": null,
+  "blocked": "ฝันครั้งก่อนเมื่อ 0 นาทีที่แล้ว ต้องห่างกันอย่างน้อย 6 ชั่วโมง (อีก 6 ชั่วโมง)",
+  "newEntries": 0,
+  "idleMinutes": 0,
+  "quietNow": false,
+  "quietHours": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "activity": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0
+  ]
+}

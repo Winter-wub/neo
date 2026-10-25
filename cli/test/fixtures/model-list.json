@@ -1,0 +1,20 @@
+{
+  "name": "fakeagent",
+  "mapped": [
+    {
+      "alias": "เร็ว",
+      "id": "m1"
+    }
+  ],
+  "list": [
+    {
+      "id": "m0",
+      "name": "M0"
+    },
+    {
+      "id": "m1",
+      "name": "M1"
+    }
+  ],
+  "current": null
+}

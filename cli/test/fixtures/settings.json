@@ -1,0 +1,20 @@
+{
+  "requireName": true,
+  "followUp": false,
+  "bypass": true,
+  "tailscale": true,
+  "lan": false,
+  "idle": {
+    "sleepAfter": 150,
+    "clock": true
+  },
+  "dream": true,
+  "onboarded": false,
+  "claudeConfigDir": null,
+  "home": {
+    "city": "กรุงเทพฯ",
+    "lat": 13.75,
+    "lon": 100.52
+  },
+  "mcpServers": null
+}

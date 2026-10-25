@@ -1,0 +1,8 @@
+{
+  "pet": {
+    "hunger": 0.4,
+    "affection": 1,
+    "at": 1700000000000
+  },
+  "sleeping": false
+}

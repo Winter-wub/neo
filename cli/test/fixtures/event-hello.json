@@ -1,0 +1,17 @@
+{
+  "type": "hello",
+  "thinking": false,
+  "provider": "Claude Code",
+  "name": "นีโอ",
+  "face": {
+    "fg": "#7fffd4",
+    "accent": "#ff7aa8",
+    "cheek": "#ff9a9a",
+    "bg": "#000000"
+  },
+  "idle": {
+    "sleepAfter": 150,
+    "clock": true
+  },
+  "ringing": null
+}

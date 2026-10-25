@@ -1,0 +1,30 @@
+{
+  "_help": "agent ในเครื่องหาเองอัตโนมัติ (registry ของ acpx + ทดลองคุย ACP) ไม่ต้องใส่ที่นี่. ไฟล์นี้เก็บแค่ที่ผู้ใช้ตั้งเอง: custom endpoint (type openai | http | acp) และค่าที่ทับของ agent ที่หาเจอ (label, aliases = ชื่อเรียกด้วยเสียง, models = ชื่อเล่น → id โมเดล, model = ค่าเริ่มต้น, config). แก้ได้จากหน้า console (ปุ่ม ⚙)",
+  "default": "claude",
+  "providers": {
+    "opencode": {
+      "_note": "ใช้เมื่อปิด \"ข้ามการขออนุญาต\" ในหน้า console: โหมด plan = อ่าน/วางแผนอย่างเดียว (โหมด build ของ opencode อาจแก้ไฟล์โดยไม่ขออนุญาต); ตอนเปิด bypass Neo เลือกโหมดที่สิทธิ์เต็มที่สุดเอง",
+      "config": {
+        "mode": "plan"
+      }
+    },
+    "openrouter": {
+      "type": "openai",
+      "label": "OpenRouter",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "apiKeyFile": "~/.config/neo/openrouter.key",
+      "headers": {
+        "HTTP-Referer": "http://127.0.0.1:8000/console.html",
+        "X-Title": "Neo companion"
+      },
+      "model": "nvidia/nemotron-3.5-super-vl:free",
+      "aliases": [
+        "openrouter"
+      ],
+      "models": {
+        "nvdia-vl": "nvidia/nemotron-3.5-super-vl:free"
+      }
+    }
+  }
+}

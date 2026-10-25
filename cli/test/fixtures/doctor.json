@@ -1,0 +1,62 @@
+[
+  {
+    "id": "claude",
+    "label": "Claude Code (claude)",
+    "ok": true,
+    "found": {
+      "claude": "/usr/local/bin/claude"
+    },
+    "detail": "2.1.0 (Claude Code) · ~/OpenBot/Shared/companion-bot/cli/test/fake-bin/claude"
+  },
+  {
+    "id": "stt",
+    "ok": false,
+    "label": "ถอดเสียง (neo-stt · Speech)",
+    "detail": "เปิด neo-stt ไม่ได้ (~/.bun/bin/neo-stt): ENOENT: no such file or directory, posix_spawn '~/.bun/bin/neo-stt'",
+    "fix": "สร้าง/ติดตั้ง neo-stt ด้วย cli/stt/build.sh แล้ว neo daemon restart"
+  },
+  {
+    "id": "network",
+    "label": "เครือข่ายสำหรับมือถือ",
+    "found": {
+      "tailscale": null
+    },
+    "ok": false,
+    "optional": true,
+    "detail": "ฟังเฉพาะ localhost (ต่อผ่านสาย USB + adb reverse ได้)",
+    "fix": "ติดตั้ง Tailscale แล้วเข้าสู่ระบบ (หรือ neo settings set lan true)"
+  },
+  {
+    "id": "agents",
+    "label": "เอเจนต์ (ACP)",
+    "found": {
+      "acpx": null,
+      "orca": "/usr/local/bin/orca",
+      "ego-browser": "/usr/local/bin/ego-browser"
+    },
+    "ok": false,
+    "optional": true,
+    "detail": "ไม่พบเอเจนต์อื่นนอกจาก Claude Code",
+    "fix": "ติดตั้ง acpx หรือเอเจนต์ ACP แล้ว neo provider discover"
+  },
+  {
+    "id": "phone",
+    "label": "มือถือ (NeoApp)",
+    "ok": false,
+    "detail": "ยังไม่มีมือถือที่จับคู่",
+    "fix": "neo devices pair"
+  },
+  {
+    "id": "fda",
+    "label": "Full Disk Access",
+    "optional": true,
+    "ok": true,
+    "detail": "อ่านโฟลเดอร์ที่ถูกป้องกันได้"
+  },
+  {
+    "id": "jobs",
+    "ok": true,
+    "label": "งานตั้งเวลา (jobs.md)",
+    "detail": "อ่านได้ (ยังไม่มีงาน)"
+  }
+]

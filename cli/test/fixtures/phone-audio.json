@@ -1,0 +1,23 @@
+{
+  "transcripts": [
+    "นีโอ วันนี้วันอะไร"
+  ],
+  "outcome": {
+    "outcome": "card",
+    "card": {
+      "kind": "text",
+      "layout": "text",
+      "icon": "text",
+      "emotion": "happy",
+      "sounds": [
+        "happy"
+      ],
+      "seconds": 10,
+      "items": [],
+      "title": "วันนี้วันอะไร",
+      "lines": [
+        "คำตอบ"
+      ]
+    }
+  }
+}

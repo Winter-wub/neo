@@ -1,0 +1,18 @@
+{
+  "card": {
+    "kind": "text",
+    "layout": "text",
+    "icon": "task",
+    "emotion": "proud",
+    "sounds": [
+      "happy"
+    ],
+    "seconds": 8,
+    "items": [],
+    "title": "โมเดล เร็ว",
+    "lines": [
+      "Fake Agent",
+      "m1"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "neo-contract",
+  "private": true,
+  "type": "module",
+  "description": "Black-box contract suite for Neo's phone port (NeoApp <-> Neo daemon). Backend-agnostic: runs against the old Node backend today and against NeoCli later.",
+  "scripts": {
+    "test": "bun test",
+    "test:old": "CONTRACT_BACKEND=old bun test",
+    "test:neocli": "CONTRACT_BACKEND=neocli bun test"
+  }
+}

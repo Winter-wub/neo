@@ -1,0 +1,15 @@
+#!/usr/bin/env bun
+// Test bridge for the contract suite: the neo-stt stdio protocol in, the suite's FakeStt (HTTP, $FAKE_STT_PORT) out.
+import { createInterface } from 'node:readline'
+import { readFileSync } from 'node:fs'
+for await (const line of createInterface({ input: process.stdin })) {
+  const req = JSON.parse(line) as { op?: string; wav?: string; hints?: string[] }
+  if (req.op) { process.stdout.write(JSON.stringify({ status: 'authorized', onDevice: true }) + '\n'); continue }
+  try {
+    const res = await fetch(`http://127.0.0.1:${process.env.FAKE_STT_PORT}/stt?hints=${encodeURIComponent((req.hints ?? []).join(','))}`, { method: 'POST', body: readFileSync(req.wav!) })
+    const body = (await res.json()) as { text?: string; error?: string }
+    process.stdout.write(JSON.stringify(res.ok ? { text: body.text ?? '' } : { error: body.error ?? 'fail' }) + '\n')
+  } catch (e) {
+    process.stdout.write(JSON.stringify({ error: String(e) }) + '\n')
+  }
+}

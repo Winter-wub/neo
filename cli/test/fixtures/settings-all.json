@@ -1,0 +1,22 @@
+{
+  "requireName": true,
+  "followUp": true,
+  "bypass": true,
+  "tailscale": true,
+  "lan": false,
+  "idle": {
+    "sleepAfter": 600,
+    "clock": true
+  },
+  "dream": true,
+  "onboarded": false,
+  "claudeConfigDir": "/Users/me/.claude",
+  "home": {
+    "city": "เชียงใหม่",
+    "lat": 18.79,
+    "lon": 98.98
+  },
+  "mcpServers": [
+    "MCP_DOCKER"
+  ]
+}

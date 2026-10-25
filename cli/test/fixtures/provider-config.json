@@ -1,0 +1,55 @@
+{
+  "default": "claude",
+  "providers": {
+    "claude": {
+      "type": "claude-code",
+      "label": "Claude Code",
+      "found": true
+    },
+    "fakeagent": {
+      "type": "acp",
+      "label": "Fake Agent",
+      "command": "~/.bun/bin/bun",
+      "args": [
+        "~/OpenBot/Shared/companion-bot/cli/test/fake-acp-agent.js"
+      ],
+      "found": true
+    },
+    "router": {
+      "type": "openai",
+      "label": "Router",
+      "baseUrl": "http://127.0.0.1:1/v1",
+      "model": "m",
+      "models": {
+        "เร็ว": "m"
+      },
+      "apiKeyFile": "/var/folders/cy/bb8qp2_x2033hxb7v274ky7w0000gp/T/neo-EmqUPq/router.key"
+    }
+  },
+  "overrides": {
+    "router": {
+      "type": "openai",
+      "label": "Router",
+      "baseUrl": "http://127.0.0.1:1/v1",
+      "model": "m",
+      "models": {
+        "เร็ว": "m"
+      },
+      "apiKeyFile": "/var/folders/cy/bb8qp2_x2033hxb7v274ky7w0000gp/T/neo-EmqUPq/router.key"
+    }
+  },
+  "discovered": [
+    {
+      "name": "fakeagent",
+      "label": "Fake Agent",
+      "type": "acp",
+      "available": true,
+      "via": "PATH fake"
+    }
+  ],
+  "keys": {
+    "claude": false,
+    "fakeagent": false,
+    "router": true
+  }
+}

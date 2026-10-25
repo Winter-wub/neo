@@ -1,0 +1,23 @@
+{
+  "type": "alarm",
+  "id": "a1b2c3d4",
+  "title": "ปลุก",
+  "card": {
+    "kind": "text",
+    "layout": "big",
+    "icon": "clock",
+    "big": "22:23",
+    "title": "ปลุก",
+    "lines": [
+      "แตะหน้าจอ หรือพูด หยุด เพื่อปิด",
+      "พูด ขออีก 5 นาที เพื่อเลื่อน"
+    ],
+    "emotion": "excited",
+    "sounds": [
+      "excited"
+    ],
+    "seconds": 90,
+    "items": []
+  },
+  "at": 1700000000000
+}

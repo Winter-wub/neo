@@ -1,0 +1,6 @@
+{
+  "type": "idle",
+  "sleepAfter": 600,
+  "clock": true,
+  "at": 1700000000000
+}

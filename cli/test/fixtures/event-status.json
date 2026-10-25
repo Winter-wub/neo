@@ -1,0 +1,16 @@
+{
+  "type": "status",
+  "phone": false,
+  "provider": "Claude Code",
+  "model": null,
+  "thinking": false,
+  "ringing": false,
+  "busy": false,
+  "consoles": 1,
+  "requireName": true,
+  "bypass": true,
+  "pet": null,
+  "uptime": 65,
+  "pid": 4242,
+  "at": 1700000065000
+}

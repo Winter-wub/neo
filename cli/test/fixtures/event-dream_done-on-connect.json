@@ -1,0 +1,22 @@
+{
+  "type": "dream_done",
+  "at": 0,
+  "card": {
+    "kind": "text",
+    "layout": "text",
+    "icon": "text",
+    "title": "ฝันแล้ว",
+    "lines": [
+      "ฝันถึงปลาทอง",
+      "ฝันถึงปลาทอง"
+    ],
+    "items": [],
+    "emotion": "love",
+    "sounds": [
+      "love",
+      "happy"
+    ],
+    "seconds": 28,
+    "dream": true
+  }
+}

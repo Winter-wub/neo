@@ -1,0 +1,21 @@
+{
+  "outcome": "card",
+  "card": {
+    "kind": "weather",
+    "layout": "text",
+    "icon": "rain",
+    "title": "30°C",
+    "lines": [
+      "กรุงเทพฯ · พรุ่งนี้",
+      "ฝนตก",
+      "ต่ำสุด 25° ฝน 80%"
+    ],
+    "items": [],
+    "emotion": "curious",
+    "sounds": [
+      "greet",
+      "curious"
+    ],
+    "seconds": 15
+  }
+}

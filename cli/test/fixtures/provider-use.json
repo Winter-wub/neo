@@ -1,0 +1,19 @@
+{
+  "current": "fakeagent",
+  "card": {
+    "kind": "text",
+    "layout": "text",
+    "icon": "task",
+    "emotion": "excited",
+    "sounds": [
+      "happy"
+    ],
+    "seconds": 10,
+    "items": [],
+    "title": "ใช้ Fake Agent",
+    "lines": [
+      "ต่อจากนี้ นีโอ ถาม Fake Agent แทน",
+      "พูด สลับไปใช้ … เพื่อเปลี่ยนอีก"
+    ]
+  }
+}

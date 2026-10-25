@@ -1,0 +1,7 @@
+{
+  "id": "stt",
+  "label": "ถอดเสียง (neo-stt · Speech)",
+  "ok": false,
+  "detail": "ยังไม่ได้ขออนุญาต Speech Recognition",
+  "fix": "neo doctor --fix stt"
+}

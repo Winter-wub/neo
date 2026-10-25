@@ -1,9 +1,9 @@
-# Neo app (เดิมชื่อโมจิ) (web/PWA) — M0+M1
+# Neo — ฝั่ง Mac
 
-เปิด: `cd app && python3 -m http.server 8000` แล้วเข้า `http://<IP ของ Mac>:8000/` จาก Chrome บนมือถือ (Wi-Fi เดียวกัน) แตะ "ปลุกโมจิ"; เพิ่ม `?debug=1` เพื่อดูสถานะ
-- ตา+ปาก pixel 32×18, เสียงร้อง 14 ไฟล์ใน `sounds/`, ปากขยับตามความดัง, แตะ=สะดุ้ง/ทัก, ลูบ=เคลิ้ม+ครางวน+หัวใจ, ว่างนาน=ง่วงหลับ
-- ไม่มีไมค์/ไม่ใช้เน็ตหลังโหลดครั้งแรก (service worker cache; ต้องเป็น https หรือ localhost ถึงจะลง PWA/SW ได้)
-- ยังไม่ได้ทดสอบบน A7 จริง
-- ไมค์ (ฟังแค่ระดับความดัง ไม่ถอดคำ/ไม่เก็บเสียง): เสียงดังฉับพลัน=สะดุ้ง, เสียงคุยต่อเนื่อง=ตาโตฟัง แล้วร้องตอบ (เว้น 8 วิ), เสียงปลุกจากหลับ; ไม่ฟังตอนโมจิกำลังร้อง/ครางเพื่อกันฟังเสียงตัวเอง; ต้องเปิดผ่าน localhost/https (adb reverse tcp:8000 tcp:8000)
-- ปรับ threshold ที่ฟังก์ชัน `micTick` (over>0.2 = เสียงดัง, over>0.04 = มีเสียงคุย)
-- แอป Android (WebView + อัดไมค์ดิบ): `android/` สร้างด้วย `JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleDebug` → `mochi-debug.apk`; ต้องมี `adb reverse tcp:8000 tcp:8000` (โหลดหน้าจาก Mac ที่ `localhost:8000`); ยังไม่ได้ติดตั้งลงมือถือจนกว่าผู้ใช้อนุมัติ
+ไม่มีหน้าเว็บแล้ว: ทุกอย่างอยู่ใน **Neo.app** (SwiftUI) — `app/mac/build.sh` สร้างแอปที่มีครบในตัว (node + server + ตัวถอดเสียงของ Apple + APK) ดู `INSTALL.md`
+
+- `server.js` — สมองฝั่ง Mac (Neo.app เปิดให้เอง): รับเสียงสดจากมือถือ, ตัดช่วงพูด, ถอดเสียง (Apple on-device ผ่าน Neo.app ที่ 127.0.0.1:8001), ตรวจชื่อเรียก, ส่งให้สมองที่เลือก, ส่งการ์ดกลับ
+- `voice.js` ตัดช่วงพูด/ชื่อเรียก/บทสนทนา · `places.js` อากาศตามที่ · `providers.js` ACP/OpenAI/HTTP · `discover.js` หา agent ในเครื่อง · `pairing.js` จับคู่มือถือ + สิทธิ์ · `neo-agents-mcp.js` MCP สถานะ Orca + ego browser
+- ความปลอดภัย: API ของ Mac ต้องมี token ที่ Neo.app สร้างทุกครั้งที่เปิด (กันเว็บในเบราว์เซอร์ยิง localhost); เครื่องอื่น (Tailscale/Wi-Fi/tunnel) ต้องจับคู่ด้วยรหัส 6 หลัก และใช้ได้เฉพาะ API ของมือถือ
+- ทดสอบ: `node --test app/voice.test.js app/test/*.test.js`
+- รันแบบพัฒนา (ไม่ผ่านแอป): `cd app && NEO_HOME=… node server.js` — ไม่มี NEO_APP_TOKEN = API ของ Mac ไม่ต้องใช้ token

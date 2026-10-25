@@ -1,0 +1,14 @@
+#!/usr/bin/env bun
+// Fake `ego-browser nodejs`: reads the script from stdin, appends it to $FAKE_EGO_LOG, prints the @@NEO@@ result line.
+import { appendFileSync } from 'node:fs'
+let script = ''
+for await (const chunk of process.stdin) script += chunk
+if (process.env.FAKE_EGO_LOG) appendFileSync(process.env.FAKE_EGO_LOG, JSON.stringify({ args: process.argv.slice(2), script }) + '\n')
+const url = (script.match(/page\.goto\(("[^"]*")\)/) ?? [])[1]
+const target = url ? JSON.parse(url) : ''
+if (target.includes('ego-down')) {
+  console.log('[ego-browser:notice] starting\nego browser is not running')
+  process.exit(1)
+}
+console.log('[ego-browser:notice] hi')
+console.log('@@NEO@@' + JSON.stringify({ title: 'T ' + target, url: target, links: script.includes('}), true);') ? [{ title: 'ผลที่หนึ่ง', url: 'https://a.example/1' }] : [], text: 'body of ' + target }))
