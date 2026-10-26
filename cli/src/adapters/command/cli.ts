@@ -11,6 +11,7 @@ import { isBrainCommand, runBrainCommand } from './brain-cli'
 import { isJobsCommand, runJobsCommand } from './jobs-cli'
 import { isDreamCommand, runDreamCommand } from './dream-cli'
 import { isMemoryCommand, runMemoryCommand } from './memory-cli'
+import { isAnimationCommand, runAnimationCommand } from './animation-cli'
 import { isPetCommand, runPetCommand } from './pet-cli'
 import { NOT_ADDRESSED, sayMarkdown } from './say-render'
 import { isSpeechCommand, runSpeechCommand } from './speech-cli'
@@ -80,6 +81,7 @@ async function dispatch(command: Command, globals: Globals, io: Io): Promise<Exi
   if (isJobsCommand(command)) return runJobsCommand(command, daemon, globals, io)
   if (isMemoryCommand(command)) return runMemoryCommand(command, daemon, globals, io)
   if (isDreamCommand(command)) return runDreamCommand(command, daemon, globals, io)
+  if (isAnimationCommand(command)) return runAnimationCommand(command, daemon, globals, io)
   if (isPetCommand(command)) return runPetCommand(command, daemon, globals, io)
   if (isSpeechCommand(command)) return runSpeechCommand(command, daemon, globals, io)
   switch (command.name) {

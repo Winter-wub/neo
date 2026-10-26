@@ -8,7 +8,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-IDENTITY="${NEO_SIGN_IDENTITY:-<Apple Development identity>}"
+# the first Apple Development certificate in the keychain unless NEO_SIGN_IDENTITY says otherwise
+IDENTITY="${NEO_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)}"
+[ -n "$IDENTITY" ] || { echo "no Apple Development certificate in the keychain: set NEO_SIGN_IDENTITY" >&2; exit 1; }
 OUT="${NEO_OUT:-dist/neo}"
 IDENTIFIER="${NEO_IDENTIFIER:-com.mochi.neo.cli}"
 BUILD="${NEO_BUILD:-$(git rev-parse --short HEAD 2>/dev/null || echo dev)}"

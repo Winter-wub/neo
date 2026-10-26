@@ -30,7 +30,7 @@ class EventParseTest {
 
     @Test fun unknownTypeIsKept() {
         assertEquals(ServerEvent.Unknown("quantum"), ev("""{"type":"quantum","x":1}"""))
-        assertEquals(ServerEvent.Unknown("provider"), ev("""{"type":"provider","name":"a"}"""))
+        assertEquals(ServerEvent.ProviderChanged("a", ""), ev("""{"type":"provider","name":"a"}"""))
     }
     @Test fun missingTypeIsUnknown() {
         assertEquals(ServerEvent.Unknown(""), ev("{}"))

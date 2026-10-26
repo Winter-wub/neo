@@ -1,0 +1,21 @@
+{
+  "type": "tool",
+  "name": "WebSearch",
+  "input": "{\"query\":\"gold\"}",
+  "key": "WebSearch",
+  "animation": {
+    "tool": "WebSearch",
+    "label": "WebSearch",
+    "w": 24,
+    "h": 24,
+    "palette": {
+      "a": "#ff0000",
+      "b": "#00ff00"
+    },
+    "frames": {},
+    "fps": 4,
+    "createdBy": "Claude Code",
+    "at": 1700000000000
+  },
+  "at": 1700000000000
+}

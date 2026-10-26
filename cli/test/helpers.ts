@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import type { Clock } from '../src/core/clock'
 
@@ -43,7 +43,8 @@ const FIXTURES = join(import.meta.dir, 'fixtures')
 export async function golden(name: string, value: unknown) {
   const file = join(FIXTURES, `${name}.json`)
   await mkdir(dirname(file), { recursive: true })
-  await writeFile(file, JSON.stringify(value, null, 2) + '\n')
+  // fixtures are committed: the machine's home directory reads as ~
+  await writeFile(file, JSON.stringify(value, null, 2).replaceAll(homedir(), '~') + '\n')
 }
 
 export async function nextOf<T>(it: AsyncIterator<T>, timeoutMs = 3000): Promise<T> {

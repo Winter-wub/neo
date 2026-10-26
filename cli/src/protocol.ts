@@ -118,7 +118,41 @@ export type IgnoredEvent = { type: 'ignored'; at: number; text: string }
 export type ArmedEvent = { type: 'armed'; at: number }
 export type ThinkingEvent = { type: 'thinking'; at: number; text: string }
 export type SessionEvent = { type: 'session'; at: number; fresh: boolean; turn: number; provider: string }
-export type ToolEvent = { type: 'tool'; at: number; name: string; input: string }
+/** `key` and `animation` (ticket 27): the exact-tool key and the pixel loop Neo drew for it; `animation: null` = none yet. Old NeoApps ignore both. */
+export type ToolEvent = { type: 'tool'; at: number; name: string; input: string; key?: string; animation?: ToolAnimation | null }
+/** A tool's animation was drawn, redrawn (`animation` set) or removed (`animation: null`). */
+export type AnimationEvent = { type: 'animation'; at: number; tool: string; animation: ToolAnimation | null }
+
+/** One pixel loop for one exact tool (`animations/<tool>.json`): 24×24 up to 48×32, ≤12 palette colours, 2–8 frames. */
+export interface ToolAnimation {
+  /** Exact tool name (`Bash`, `mcp__MCP_DOCKER__jira_search`); for the Skill tool `Skill:<skill name>`. */
+  tool: string
+  /** The text label the phone showed before the animation existed. */
+  label: string
+  w: number
+  h: number
+  palette: Record<string, string>
+  frames: string[][]
+  fps: number
+  /** The Brain that drew it: provider and model. */
+  createdBy: string
+  at: number
+}
+/** One row of `neo animation list` (no pixels). */
+export interface AnimationInfo {
+  tool: string
+  label: string
+  w: number
+  h: number
+  frames: number
+  fps: number
+  createdBy: string
+  at: number
+}
+export interface AnimationRefRequest {
+  /** An exact tool key from `GET /animations`, or a part of one that matches a single tool. */
+  tool: string
+}
 export type CardEvent = { type: 'card'; at: number; card: Card }
 export type AskerrEvent = { type: 'askerr'; at: number; error: string }
 export type CancelledEvent = { type: 'cancelled'; at: number }
@@ -170,9 +204,13 @@ export interface DiscoveredAgent {
   why?: string
 }
 /** `neo provider config --json`: never contains key values, only whether one is found. */
+/** A provider as `neo provider config` shows it: the saved entry, plus `found` when the machine has what it needs. */
+export interface ProviderConfigEntry extends ProviderConfig {
+  found?: true
+}
 export interface ProviderConfigView {
   default: string
-  providers: Record<string, ProviderConfig & { found?: true }>
+  providers: Record<string, ProviderConfigEntry>
   overrides: Record<string, ProviderConfig>
   discovered: DiscoveredAgent[]
   keys: Record<string, boolean>
@@ -182,9 +220,13 @@ export interface ModelEntry {
   name: string
 }
 /** `neo model list` */
+export interface ModelAlias {
+  alias: string
+  id: string
+}
 export interface ModelList {
   name: string
-  mapped: Array<{ alias: string; id: string }>
+  mapped: ModelAlias[]
   list: ModelEntry[]
   current: string | null
   error?: string
@@ -261,6 +303,16 @@ export interface DreamInfo {
   undelivered: boolean
 }
 /** `neo dream show --json`: the file's markdown plus what it says. */
+export interface DreamInsight {
+  q: string
+  finding: string
+}
+/** What the dream card says, before it becomes a `Card`. */
+export interface DreamCardView {
+  title: string
+  lines: string[]
+  items: CardItem[]
+}
 export interface DreamDoc {
   id: string
   text: string
@@ -270,11 +322,11 @@ export interface DreamDoc {
   took: number
   entries: number
   dream: string
-  insights: Array<{ q: string; finding: string }>
+  insights: DreamInsight[]
   patterns: string[]
   added: string[]
   removed: string[]
-  card: { title: string; lines: string[]; items: Array<{ t: string; v: string }> }
+  card: DreamCardView
   undelivered: boolean
 }
 /** `neo dream status --json` */
@@ -328,6 +380,16 @@ export interface JobDraft {
   cron?: string
   when: string
 }
+export interface RingingJob {
+  id: string
+  title: string
+}
+/** `neo jobs list` */
+export interface JobList {
+  jobs: JobInfo[]
+  ringing: RingingJob | null
+  problems: JobProblem[]
+}
 /** One line of jobs.md Neo could not read. */
 export interface JobProblem {
   line: number
@@ -361,10 +423,14 @@ export type WakeEvent = { type: 'wake'; at: number; name: string; variants: stri
 export type TrainEvent = { type: 'train'; at: number; name: string; n: number; text?: string }
 export type FaceEvent = { type: 'face'; at: number } & Face
 /** `neo name` */
+export interface WakeTraining {
+  name: string
+  got: string[]
+}
 export interface WakeInfo {
   name: string
   variants: string[]
-  training: { name: string; got: string[] } | null
+  training: WakeTraining | null
 }
 /** `neo pet` */
 export interface PetInfo {
@@ -411,7 +477,7 @@ export interface DeviceInfo {
 
 export type NeoEvent =
   | StatusEvent | SettingsEvent | IdleEvent | PairedEvent | DevicesEvent
-  | HeardEvent | IgnoredEvent | ArmedEvent | ThinkingEvent | SessionEvent | ToolEvent | CardEvent | AskerrEvent | CancelledEvent
+  | HeardEvent | IgnoredEvent | ArmedEvent | ThinkingEvent | SessionEvent | ToolEvent | AnimationEvent | CardEvent | AskerrEvent | CancelledEvent
   | ProviderEvent | ModelEvent
   | AlarmEvent | AlarmOffEvent | JobEvent | ScheduleEvent | JobsEvent | JobsWarningEvent
   | ChangedEvent | DreamingEvent | DreamDoneEvent | DreamFailEvent
@@ -447,6 +513,134 @@ export interface PetRequest {
 export interface AskRequest {
   text: string
 }
+
+// ---- phone settings routes (ticket 24): the command-socket routes below, served on the phone port under `/api` ----
+
+/** `POST /settings/set`: the daemon parses and validates; a bad value is a 400 with a Thai message. */
+export interface SettingSetRequest {
+  name: string
+  args: string[]
+}
+export interface DeviceRevokeRequest {
+  id: string
+}
+/** `GET /api/devices` marks the caller's own row, so a phone can revoke itself. */
+export interface PhoneDeviceInfo extends DeviceInfo {
+  self: boolean
+}
+export interface ProviderUseRequest {
+  name: string
+}
+export interface ProviderUseResponse {
+  current: string
+  card: Card
+}
+/** `cfg` and `apiKey` to save, or `remove: true`. The key is written 0600 to NEO_HOME and never returned. */
+export interface ProviderConfigSave {
+  name: string
+  cfg?: ProviderConfig
+  apiKey?: string
+  remove?: boolean
+}
+export interface ModelsListRequest {
+  name?: string
+}
+/** `model: null` = the provider's default. */
+export interface ModelUseRequest {
+  name?: string
+  model: string | null
+}
+export interface CardResponse {
+  card: Card
+}
+export interface NameSetRequest {
+  name: string
+  variants?: string[]
+}
+export interface NameRequest {
+  name: string
+}
+export interface JobParseRequest {
+  speech: string
+}
+export interface JobParseResponse {
+  draft: JobDraft
+}
+export interface JobAddRequest {
+  kind: JobKind
+  title?: string
+  prompt?: string
+  at?: number
+  cron?: string
+}
+/** `ref` is a job id or its title. */
+export interface JobEditRequest {
+  ref: string
+  title?: string
+  prompt?: string
+  at?: number
+  cron?: string
+}
+export interface JobEnableRequest {
+  ref: string
+  enabled: boolean
+}
+export interface JobRefRequest {
+  ref: string
+}
+export interface JobRemoveResponse {
+  removed: JobInfo
+}
+export interface MemorySaveRequest {
+  text: string
+  since: string
+}
+export interface MemoryAddRequest {
+  text: string
+  section?: string
+}
+/** Memory and journal: several matches without `all` is a 409 listing them, nothing removed. */
+export interface ForgetRequest {
+  text: string
+  all?: boolean
+}
+export interface MemoryForgetResponse {
+  removed: MemoryItem[]
+}
+export interface JournalShowRequest {
+  day?: string
+}
+export interface JournalForgetResponse {
+  removed: JournalEntry[]
+}
+export interface DreamEnableRequest {
+  enabled: boolean
+}
+/** `id` is a file name from `GET /dreams`, or `last`. */
+export interface DreamIdRequest {
+  id: string
+}
+export interface DreamRemoveResponse {
+  removed: DreamInfo
+}
+
+/** The command-socket routes a paired phone may also call, at `/api` + path (device token, same bodies and replies). */
+export const PHONE_SETTINGS_ROUTES = [
+  'GET /status',
+  'GET /settings', 'POST /settings', 'POST /settings/set',
+  'GET /devices', 'POST /devices/revoke',
+  'GET /providers', 'POST /providers/use', 'POST /providers/discover', 'GET /providers/config', 'POST /providers/config',
+  'POST /models/list', 'POST /models/use',
+  'GET /animations', 'POST /animations/show', 'POST /animations/redo', 'POST /animations/rm',
+  'GET /name', 'POST /name/set', 'POST /name/train', 'POST /name/train/cancel',
+  'GET /face', 'POST /face',
+  'GET /jobs', 'POST /jobs/parse', 'POST /jobs/add', 'POST /jobs/edit', 'POST /jobs/enable', 'POST /jobs/remove', 'POST /jobs/test',
+  'GET /memory', 'POST /memory', 'POST /memory/add', 'POST /memory/forget',
+  'GET /journal', 'POST /journal/show', 'POST /journal/forget',
+  'GET /dream', 'POST /dream/now', 'POST /dream/enable',
+  'GET /dreams', 'POST /dreams/show', 'POST /dreams/rm',
+] as const satisfies readonly (keyof Routes)[]
+export type PhoneSettingsRoute = (typeof PHONE_SETTINGS_ROUTES)[number]
 
 // ---- command socket ----
 
@@ -491,50 +685,55 @@ export interface Routes {
   'GET /settings': { response: Settings }
   'POST /settings': { body: SettingsPatch; response: Settings }
   /** `neo settings set <name> <args…>`: the daemon parses and validates; a bad value is code 1 with a Thai message. */
-  'POST /settings/set': { body: { name: string; args: string[] }; response: Settings }
+  'POST /settings/set': { body: SettingSetRequest; response: Settings }
   /** Same path as speech. `wait: false` returns `accepted` at once. */
   'POST /say': { body: { text: string; wait?: boolean }; response: SayResult }
   /** Socket-only (not on port 8000). */
   'POST /cancel': { response: { cancelled: boolean } }
   'POST /devices/pair': { response: PairStart }
   'GET /devices': { response: DeviceInfo[] }
-  'POST /devices/revoke': { body: { id: string }; response: { ok: true } }
+  'POST /devices/revoke': { body: DeviceRevokeRequest; response: { ok: true } }
   'GET /memory': { response: MemoryDoc }
   /** Conflict-checked: 409 when memory.md is no longer the version `since`. */
-  'POST /memory': { body: { text: string; since: string }; response: MemoryDoc }
-  'POST /memory/add': { body: { text: string; section?: string }; response: MemoryDoc }
+  'POST /memory': { body: MemorySaveRequest; response: MemoryDoc }
+  'POST /memory/add': { body: MemoryAddRequest; response: MemoryDoc }
   /** Several matches without `all`: 409 listing them, nothing removed. */
-  'POST /memory/forget': { body: { text: string; all?: boolean }; response: { removed: MemoryItem[] } }
+  'POST /memory/forget': { body: ForgetRequest; response: MemoryForgetResponse }
   'POST /memory/clear': { response: { removed: number } }
   'GET /journal': { response: JournalDay[] }
   /** `day` is YYYY-MM-DD, `today` or `yesterday`; default today. */
-  'POST /journal/show': { body: { day?: string }; response: JournalDoc }
+  'POST /journal/show': { body: JournalShowRequest; response: JournalDoc }
   'POST /journal/save': { body: { day: string; text: string; since: string }; response: JournalDoc }
-  'POST /journal/forget': { body: { text: string; all?: boolean }; response: { removed: JournalEntry[] } }
+  'POST /journal/forget': { body: ForgetRequest; response: JournalForgetResponse }
   'POST /journal/clear': { response: { removed: number } }
   /** Dreams (ticket 12). `id` is a file name from `GET /dreams`, or `last`. */
   'GET /dream': { response: DreamStatus }
   /** Starts a dream and returns when it is over; 409 while one is running or when there is nothing new in the journal. */
   'POST /dream/now': { response: DreamDoc }
-  'POST /dream/enable': { body: { enabled: boolean }; response: DreamStatus }
+  'POST /dream/enable': { body: DreamEnableRequest; response: DreamStatus }
   'GET /dreams': { response: DreamInfo[] }
-  'POST /dreams/show': { body: { id: string }; response: DreamDoc }
-  'POST /dreams/rm': { body: { id: string }; response: { removed: DreamInfo } }
+  'POST /dreams/show': { body: DreamIdRequest; response: DreamDoc }
+  'POST /dreams/rm': { body: DreamIdRequest; response: DreamRemoveResponse }
   'POST /dreams/clear': { response: { removed: number } }
   /** Jobs (ticket 09). `ref` is a job id or its title. */
-  'GET /jobs': { response: { jobs: JobInfo[]; ringing: { id: string; title: string } | null; problems: JobProblem[] } }
+  'GET /jobs': { response: JobList }
   /** Understand a sentence like "ปลุกพรุ่งนี้ตีห้าครึ่ง" without saving anything. */
-  'POST /jobs/parse': { body: { speech: string }; response: { draft: JobDraft } }
-  'POST /jobs/add': { body: { kind: JobKind; title?: string; prompt?: string; at?: number; cron?: string }; response: JobInfo }
-  'POST /jobs/edit': { body: { ref: string; title?: string; prompt?: string; at?: number; cron?: string }; response: JobInfo }
-  'POST /jobs/enable': { body: { ref: string; enabled: boolean }; response: JobInfo }
-  'POST /jobs/remove': { body: { ref: string }; response: { removed: JobInfo } }
+  'POST /jobs/parse': { body: JobParseRequest; response: JobParseResponse }
+  'POST /jobs/add': { body: JobAddRequest; response: JobInfo }
+  'POST /jobs/edit': { body: JobEditRequest; response: JobInfo }
+  'POST /jobs/enable': { body: JobEnableRequest; response: JobInfo }
+  'POST /jobs/remove': { body: JobRefRequest; response: JobRemoveResponse }
   'POST /jobs/clear': { body: { kind?: JobKind }; response: { removed: number } }
   /** Fire it now. */
-  'POST /jobs/test': { body: { ref: string }; response: { ok: true } }
+  'POST /jobs/test': { body: JobRefRequest; response: { ok: true } }
   'GET /jobs/file': { response: { text: string; version: string } }
   /** Refused with exit 1 when jobs.md changed since `since` (the version you read). */
   'POST /jobs/file': { body: { text: string; since: string }; response: { version: string } }
+  /** Tool animations (ticket 27). `redo` queues a new drawing and returns at once; the `animation` event announces it. */
+  'GET /animations': { response: AnimationInfo[] }
+  'POST /animations/show': { body: AnimationRefRequest; response: ToolAnimation }
+  'POST /animations/redo': { body: AnimationRefRequest; response: { tool: string; queued: true } }
+  'POST /animations/rm': { body: AnimationRefRequest; response: { removed: AnimationInfo } }
   /** Pet, name, face (ticket 10). */
   'GET /pet': { response: PetInfo }
   'POST /pet/feed': { body: { food?: Food }; response: { food: Food } }
@@ -544,23 +743,23 @@ export interface Routes {
   'POST /phone/pet': { body: { hunger: number; affection: number }; response: { ok: true } }
   'GET /name': { response: WakeInfo }
   /** Set the name now; `variants` default to the name alone. */
-  'POST /name/set': { body: { name: string; variants?: string[] }; response: WakeInfo }
+  'POST /name/set': { body: NameSetRequest; response: WakeInfo }
   /** The next three transcripts become the variants. */
-  'POST /name/train': { body: { name: string }; response: WakeInfo }
+  'POST /name/train': { body: NameRequest; response: WakeInfo }
   'POST /name/train/cancel': { response: WakeInfo }
   'GET /face': { response: Face }
   'POST /face': { body: Partial<Face>; response: Face }
   'POST /alarm/stop': { body: { snooze?: number }; response: { stopped: boolean } }
   // brains (ticket 06)
   'GET /providers': { response: ProviderList }
-  'POST /providers/use': { body: { name: string }; response: { current: string; card: Card } }
+  'POST /providers/use': { body: ProviderUseRequest; response: ProviderUseResponse }
   'POST /providers/discover': { response: DiscoveredAgent[] }
   'GET /providers/config': { response: ProviderConfigView }
   /** `cfg` and `apiKey` to save, or `remove: true`. The key is written 0600 to NEO_HOME and never returned. */
-  'POST /providers/config': { body: { name: string; cfg?: ProviderConfig; apiKey?: string; remove?: boolean }; response: { ok: true } }
-  'POST /models/list': { body: { name?: string }; response: ModelList }
+  'POST /providers/config': { body: ProviderConfigSave; response: { ok: true } }
+  'POST /models/list': { body: ModelsListRequest; response: ModelList }
   /** `model: null` = the provider's default. Emits `model`, then a card. */
-  'POST /models/use': { body: { name?: string; model: string | null }; response: { card: Card } }
+  'POST /models/use': { body: ModelUseRequest; response: CardResponse }
   /** NDJSON stream; `?history=1` replays the backlog first. */
   'GET /events': { response: StreamLine }
   /** Body is a 16 kHz mono 16-bit WAV (raw bytes, not JSON): the neo command acting as a phone. Client sends it itself. */

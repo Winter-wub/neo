@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { DoctorRow, NeoEvent, Status } from '../protocol'
 import type { Brain } from './brain/brain'
+import { createAnimations } from './animations/animations'
 import { createClaudeBrain } from './brain/claude'
 import type { Discovery } from './brain/discover'
 import { createBrainHub } from './brain/hub'
@@ -20,6 +21,7 @@ import { jobsRow } from './jobs/doctor'
 import { createJobs } from './jobs/jobs'
 import { createMemory } from './memory/memory'
 import { createIdentity } from './pet/identity'
+import { createRename } from './pet/rename'
 import { createPet } from './pet/pet'
 import { createSettings } from './settings/settings'
 import { createWeather, homeOf } from './weather/weather'
@@ -73,11 +75,19 @@ export async function createCore({ home, clock, pid, brain, discover, stt, audio
     claude: model => brain ?? createClaudeBrain({ cwd: join(home, 'tasks'), mcpFile: join(home, 'neo-mcp.json'), neoCommand: [process.execPath, 'mcp'], claudeConfigDir, mcpServers, model, env }),
     mcp: { configDir: claudeConfigDir, servers: mcpServers, neoCommand: [process.execPath, 'mcp'] },
     bypass: () => settings.get().bypass,
+    petName: () => identity.wake().name,
     log: discover ? message => console.log(message) : undefined, // tests stay quiet
     onChange: () => update(hub.status()),
     onProviderChange: () => conversation.reset(),
   })
   Object.assign(live, hub.status())
+
+  // pixel loops for the tools Neo uses, drawn in the background by the Brain in use (never while it is answering)
+  const animations = createAnimations({
+    home, clock, events, brain: hub.brain, busy: () => live.thinking,
+    createdBy: () => [live.provider, live.model].filter(Boolean).join(' / '),
+    log: discover ? message => console.log(message) : undefined, // tests stay quiet
+  })
 
   const status = (): Status => {
     const { requireName, bypass } = settings.get()
@@ -101,11 +111,12 @@ export async function createCore({ home, clock, pid, brain, discover, stt, audio
   if (helper && (await stat(env.NEO_STT ?? join(dirname(process.execPath), 'neo-stt')).catch(() => null))) helper.start()
   const speech = stt ?? helper!
   const weather = createWeather({ fetch: weatherFetch, home: () => homeOf(settings.raw('home')) })
+  const rename = createRename({ identity })
   const conversation = createConversation({
-    events, clock, settings: settings.get, onBusy: thinking => update({ thinking }), listen: () => ears.listen(),
+    events, clock, settings: settings.get, onBusy: thinking => { update({ thinking }); animations.onBusy(thinking) }, toolAnimation: animations.onTool, listen: () => ears.listen(),
     memory: memory.context, onTurn: memory.record,
     pet: identity.wake, petPhrase: pet.understand,
-    ringing: jobs.ringHeard, fast: [jobs.understand], intents: { schedule: jobs.intent, weather: weather.forecast },
+    ringing: jobs.ringHeard, fast: [rename.understand, jobs.understand, animations.understand], intents: { schedule: jobs.intent, weather: weather.forecast },
     understandWeather: weather.understand,
     brain: hub.brain, switchBrain: hub.understand,
   })
@@ -157,6 +168,7 @@ export async function createCore({ home, clock, pid, brain, discover, stt, audio
     /** Stops the neo-stt helper. */
     stop: async () => {
       hub.stop()
+      animations.stop()
       jobs.stop()
       pet.stop()
       memory.close()
@@ -169,6 +181,7 @@ export async function createCore({ home, clock, pid, brain, discover, stt, audio
     pet,
     identity,
     jobs,
+    animations,
     status,
     /** Change what `status` reports; publishes a `status` event if anything differs. */
     update,

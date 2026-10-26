@@ -31,6 +31,7 @@ export const SNOOZE_MAX_MIN = 60
 const TITLE_MAX = 80
 const PROMPT_MAX = 1000
 const WATCH_DEBOUNCE_MS = 50
+const CATCH_UP_MS = 150
 
 /** A refused request. `status` is the HTTP status the command adapter answers with. */
 export class JobsError extends Error {
@@ -404,6 +405,8 @@ export async function createJobs({ home, clock, events, ask, busy, onState }: Jo
           if (debounce) clearTimeout(debounce)
           debounce = setTimeout(() => void serial(load).catch(e => console.error('jobs reload failed:', e)), WATCH_DEBOUNCE_MS)
         })
+        // fs.watch arms asynchronously: an edit made in the first moments is never reported. Look once after it has armed.
+        debounce = setTimeout(() => void serial(load).catch(e => console.error('jobs reload failed:', e)), CATCH_UP_MS)
       }, () => {})
     }
   }

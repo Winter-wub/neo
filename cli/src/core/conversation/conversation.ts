@@ -1,4 +1,4 @@
-import type { Card, SayResult } from '../../protocol'
+import type { Card, SayResult, ToolAnimation } from '../../protocol'
 import type { Answer, Brain, PermissionRequest } from '../brain/brain'
 import { cardText, confirmCard, humanize, textCard } from '../cards/cards'
 import type { Clock } from '../clock'
@@ -47,6 +47,8 @@ export interface ConversationDeps {
   fast?: Array<(text: string) => FastAnswer | null>
   /** Weather (Weather.understand): asked after the `fast` phrases and before the provider switch; the forecast comes from `intents.weather`. */
   understandWeather?(text: string): { place: string; day: number } | null
+  /** A tool is being used (Animations): its key and the stored animation, or null while none is drawn yet. Goes into the `tool` event. */
+  toolAnimation?(name: string, input: string): { key: string; animation: ToolAnimation | null }
   /** Spoken provider / model switches ("สลับไปใช้ X", "ใช้โมเดล X"). A card when it was one, after all `fast` phrases and before the Brain. */
   switchBrain?(text: string): Promise<Card | null>
 }
@@ -56,9 +58,11 @@ export interface FastAnswer {
   card: Card
   /** Said "ตกลง": do it and return the card to show. */
   confirm?: () => Promise<Card>
+  /** Asks a question instead: the next utterance (no name needed, within the follow-up window) goes here. null = it was not an answer. */
+  reply?: (text: string) => FastAnswer | null
 }
 
-type Step = { card: Card; confirm?: Extract<Answer, { type: 'skill' }>; action?: { label: string; run: () => Promise<Card> } } | { error: string }
+type Step = { card: Card; confirm?: Extract<Answer, { type: 'skill' }>; action?: { label: string; run: () => Promise<Card> }; reply?: { label: string; answer: (text: string) => FastAnswer | null } } | { error: string }
 
 export function createConversation(deps: ConversationDeps) {
   const { events, clock, brain } = deps
@@ -73,6 +77,8 @@ export function createConversation(deps: ConversationDeps) {
   let permission: { title: string; resolve(allowed: boolean): void; stop(): void } | null = null
   /** A fast phrase waiting for ตกลง (set a job, ...). */
   let pendingAction: { label: string; run: () => Promise<Card>; until: number } | null = null
+  /** A fast phrase waiting for the answer to its question ("อยากให้ชื่ออะไร"). */
+  let pendingReply: { label: string; answer: (text: string) => FastAnswer | null; until: number } | null = null
   let armedUntil = 0
   let followUntil = 0
   let wakeKey = ''
@@ -141,6 +147,7 @@ export function createConversation(deps: ConversationDeps) {
         const card = humanize(step.card)
         if (step.confirm) pending = { ...step.confirm, until: clock.now() + CONFIRM_MS }
         else if (step.action) pendingAction = { ...step.action, until: clock.now() + CONFIRM_MS }
+        else if (step.reply) pendingReply = { ...step.reply, until: clock.now() + FOLLOW_MS }
         else followUntil = clock.now() + FOLLOW_MS
         events.publish({ type: 'card', card })
         deps.onTurn?.({ q: text, a: cardText(card), ok: true })
@@ -150,7 +157,7 @@ export function createConversation(deps: ConversationDeps) {
     })
   }
 
-  const onTool = (name: string, input: string) => events.publish({ type: 'tool', name, input })
+  const onTool = (name: string, input: string) => events.publish({ type: 'tool', name, input, ...deps.toolAnimation?.(name, input) })
 
   async function askBrain(text: string, signal: AbortSignal): Promise<Step> {
     const now = clock.now()
@@ -193,6 +200,16 @@ export function createConversation(deps: ConversationDeps) {
     return { card: reply.answer.card }
   }
 
+  /** A fast phrase's answer as a turn: its card, waiting for ตกลง or for a reply when it asks one. */
+  function trackFast(text: string, answer: FastAnswer) {
+    return track(text, async () => {
+      note(text, answer.card)
+      if (answer.confirm) return { card: answer.card, action: { label: text, run: answer.confirm } }
+      if (answer.reply) return { card: answer.card, reply: { label: text, answer: answer.reply } }
+      return { card: answer.card }
+    })
+  }
+
   function ask(text: string, fastPhrases = true) {
     if (RESET.test(text)) {
       return track(text, async () => {
@@ -202,12 +219,7 @@ export function createConversation(deps: ConversationDeps) {
     }
     for (const understand of fastPhrases ? deps.fast ?? [] : []) {
       const answer = understand(text)
-      if (answer) {
-        return track(text, async () => {
-          note(text, answer.card)
-          return answer.confirm ? { card: answer.card, action: { label: text, run: answer.confirm } } : { card: answer.card }
-        })
-      }
+      if (answer) return trackFast(text, answer)
     }
     const weather = fastPhrases ? deps.understandWeather?.(text) : null
     if (weather && deps.intents?.weather) {
@@ -299,6 +311,20 @@ export function createConversation(deps: ConversationDeps) {
         }
         // something else, or too late: drop it and treat this as a new request
       }
+      if (pendingReply) {
+        const waiting = pendingReply
+        pendingReply = null
+        if (now < waiting.until) {
+          events.publish({ type: 'heard', text })
+          if (CANCEL.test(text)) {
+            events.publish({ type: 'cancelled' })
+            return { outcome: 'cancelled' }
+          }
+          const next = waiting.answer(text)
+          if (next) return trackFast(text, next)
+          // not an answer: treat this as a new request
+        }
+      }
       if (pending) {
         const waiting = pending
         pending = null
@@ -339,7 +365,7 @@ export function createConversation(deps: ConversationDeps) {
       return heardOnly()
     },
     /** For tests and diagnostics. */
-    state: () => ({ thinking, session: { ...session, notes: [...session.notes] }, pending: pending !== null || pendingAction !== null }),
+    state: () => ({ thinking, session: { ...session, notes: [...session.notes] }, pending: pending !== null || pendingAction !== null || pendingReply !== null }),
   }
 }
 

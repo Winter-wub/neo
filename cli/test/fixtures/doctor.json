@@ -6,7 +6,7 @@
     "found": {
       "claude": "/usr/local/bin/claude"
     },
-    "detail": "2.1.0 (Claude Code) · ~/OpenBot/Shared/companion-bot/cli/test/fake-bin/claude"
+    "detail": "2.1.0 (Claude Code) · /usr/local/bin/claude"
   },
   {
     "id": "stt",

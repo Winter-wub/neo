@@ -68,8 +68,12 @@ test('bypass off: strict mcp, read-only tool list, no bypass flag', async () => 
   expect(args).toContain('--strict-mcp-config')
   expect(args).not.toContain('--permission-mode')
   expect(args[args.indexOf('--tools') + 1]).toBe('WebSearch,WebFetch,Skill')
-  expect(args[args.indexOf('--allowedTools') + 1]).toContain('mcp__MCP_DOCKER__jira_search')
-  expect(args[args.indexOf('--allowedTools') + 1]).not.toContain('Bash')
+  // one tool per argument, like dreams: a single 1 KB argument can get the child killed
+  const from = args.indexOf('--allowedTools') + 1
+  const allowed = args.slice(from, args.findIndex((arg, i) => i >= from && arg.startsWith('--')) >>> 0 || undefined)
+  expect(allowed.every(tool => !tool.includes(','))).toBe(true)
+  expect(allowed).toContain('mcp__MCP_DOCKER__jira_search')
+  expect(allowed).not.toContain('Bash')
 })
 
 test('a resumed ask passes --resume and sends only the follow-up prompt with the notes', async () => {

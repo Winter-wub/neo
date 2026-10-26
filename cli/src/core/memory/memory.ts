@@ -26,6 +26,7 @@ import { addItem, parseMemory, removeItems } from './memory-doc'
 export const MEMORY_MAX = 6000
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/
 const WATCH_DEBOUNCE_MS = 50
+const CATCH_UP_MS = 150
 
 export { MemoryConflict, MemoryError, MemoryNotFound }
 
@@ -75,6 +76,7 @@ export function createMemory({ home, clock, events, watchFiles = true, dreaming 
   const watchers: FSWatcher[] = []
   const pending = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | null = null
+  let catchUp: ReturnType<typeof setTimeout> | null = null
   const later = (key: string) => {
     pending.add(key)
     timer ??= setTimeout(() => {
@@ -106,6 +108,16 @@ export function createMemory({ home, clock, events, watchFiles = true, dreaming 
       w.on('error', () => {}) // a removed directory must not crash the daemon
       w.unref?.()
     }
+    // fs.watch arms asynchronously: an edit made in the first moments is never reported. Look once after it has armed.
+    catchUp = setTimeout(() => {
+      catchUp = null
+      try {
+        later(memoryKey)
+        for (const name of readdirSync(journalDir)) if (name.endsWith('.md')) later(journalKey(name.slice(0, -3)))
+        for (const name of readdirSync(dreamDir)) if (name.endsWith('.md') && isDreamId(name.slice(0, -3))) later(dreamKey(name.slice(0, -3)))
+      } catch {} // the home was removed under us (as the watchers' error handler already allows)
+    }, CATCH_UP_MS)
+    catchUp.unref?.()
   }
 
   // ---- memory.md ----
@@ -255,6 +267,7 @@ export function createMemory({ home, clock, events, watchFiles = true, dreaming 
       dreams.close()
       for (const w of watchers) w.close()
       if (timer) clearTimeout(timer)
+      if (catchUp) clearTimeout(catchUp)
     },
   }
 }

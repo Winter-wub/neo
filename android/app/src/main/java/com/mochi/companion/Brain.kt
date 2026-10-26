@@ -386,7 +386,7 @@ class Brain(
         if (deep && ev.type !in DEEP_OK) return // หลับเป็นตาย: ไม่สนอะไรนอกจากปลุก/ฝัน/ตั้งค่า
         when (ev) {
             is ServerEvent.Sleep -> sleepNow(now)
-            is ServerEvent.Hello -> { thinking = ev.thinking; if (sub == OFFLINE) sub = ""; ev.idle?.let { idle(it) } }
+            is ServerEvent.Hello -> { thinking = ev.thinking; if (!thinking) clearToolArt(); if (sub == OFFLINE) sub = ""; ev.idle?.let { idle(it) } }
             is ServerEvent.Idle -> idle(ev.idle)
             is ServerEvent.Alarm -> {
                 if (deep) { deep = false; host.setMic(true); host.wokeUp() } // นาฬิกาปลุกที่ผู้ใช้ตั้งเองปลุกได้
@@ -410,17 +410,22 @@ class Brain(
             is ServerEvent.Heard -> { wake(now, quiet = true); moodUntil = 0; showSub("\u201c${ev.text}\u201d", 6000, now); feel(ev.text, now) }
             is ServerEvent.Armed -> { wake(now); listening(now); play(pick(Sounds.CATEGORIES.getValue("greet")), false, now) } // เรียกชื่อ → ร้องตอบ แล้วรอคำสั่ง (เงียบ 3 วิ = จบ)
             is ServerEvent.ListenEnd -> if (sub == LISTENING) { sub = ""; subUntil = 0L; moodUntil = 0 } // ไม่ได้พูดอะไร เลิกรอ
-            is ServerEvent.Thinking -> { thinking = true; doing = "ค้นหา"; hideCard(); wake(now); setMood(Mood.CURIOUS, 20000, now) }
-            is ServerEvent.Tool -> if (thinking) doing = toolLabel(ev.name)
+            is ServerEvent.Thinking -> { thinking = true; doing = "ค้นหา"; clearToolArt(); hideCard(); wake(now); setMood(Mood.CURIOUS, 20000, now) }
+            is ServerEvent.Tool -> if (thinking) { doing = toolLabel(ev.name); toolKey = ev.key.ifEmpty { ev.name }; setToolArt(ev.animation, now) }
             is ServerEvent.CardShown -> {
-                thinking = false; sub = ""; subUntil = 0L
+                thinking = false; sub = ""; subUntil = 0L; clearToolArt()
                 val c = ev.card
                 if (c != null) showCard(c, now) else say("curious", Mood.CURIOUS, 1200, now)
             }
-            is ServerEvent.Askerr -> { thinking = false; sub = ""; subUntil = 0L; say("confused", Mood.CONFUSED, 2000, now) } // ทำไม่ได้ = งง
-            is ServerEvent.Cancelled -> { thinking = false; showSub("ยกเลิกแล้ว", 2500, now); say("sad", Mood.SAD, 1500, now) } // อ้าว ไม่เอาแล้วเหรอ
+            is ServerEvent.Askerr -> { thinking = false; clearToolArt(); sub = ""; subUntil = 0L; say("confused", Mood.CONFUSED, 2000, now) } // ทำไม่ได้ = งง
+            is ServerEvent.Cancelled -> { thinking = false; clearToolArt(); showSub("ยกเลิกแล้ว", 2500, now); say("sad", Mood.SAD, 1500, now) } // อ้าว ไม่เอาแล้วเหรอ
             is ServerEvent.Loud -> if (now > spikeCool) { wake(now); say("startle", Mood.STARTLE, 900, now); spikeCool = now + 3000 }
             is ServerEvent.Ping, is ServerEvent.Face, is ServerEvent.Unknown -> {}
+            // event สำหรับหน้าตั้งค่า Neo (ดู NeoSettingsModel) — Brain ไม่ต้องทำอะไร
+            is ServerEvent.SettingsChanged, is ServerEvent.ProviderChanged, is ServerEvent.ModelChanged, is ServerEvent.WakeChanged, is ServerEvent.Training,
+            is ServerEvent.DevicesChanged, is ServerEvent.JobsChanged, is ServerEvent.JobsWarning, is ServerEvent.FileChanged -> {}
+            // ท่าที่ Neo เพิ่งวาดเสร็จระหว่างที่เครื่องมือนั้นยังทำงานอยู่ → เริ่มเล่นเลย (ไม่ต้องรอถามรอบหน้า)
+            is ServerEvent.AnimationChanged -> if (thinking && ev.tool == toolKey) setToolArt(ev.animation, now)
         }
     }
 
@@ -442,6 +447,15 @@ class Brain(
     }
 
     private var doing = "ค้นหา"
+
+    /* ---------- ท่าเครื่องมือ (ticket 28): หน้าคิดอยู่ + ภาพวนใต้หน้า แทนข้อความ ---------- */
+    private var toolKey = ""
+    private var toolAt = 0L
+    var toolArt: PixelArt? = null; private set
+    private fun setToolArt(a: NeoToolAnimation?, now: Long) { toolArt = a?.let { PixelArt.from(it) }; toolAt = now }
+    private fun clearToolArt() { toolArt = null; toolKey = "" }
+    /** เฟรมที่กำลังเล่น (วนตาม fps) */
+    fun toolFrame(now: Long): Int { val a = toolArt ?: return 0; return (((now - toolAt) * a.fps / 1000) % a.frames.size).toInt() }
     /** ชื่อเครื่องมือของ Claude → คำที่คนอ่านเข้าใจ (ซับระหว่างทำงาน) */
     private fun toolLabel(n: String) = when {
         n == "Bash" -> "รันคำสั่ง"
@@ -474,7 +488,7 @@ class Brain(
         when (s) {
             "denied" -> showSub("ไม่ได้รับสิทธิ์ไมค์", 6000, now)
             "error" -> showSub("เปิดไมค์ไม่ได้", 6000, now)
-            "offline" -> { if (thinking) { thinking = false; moodUntil = 0 }; showSub(OFFLINE, 4000, now) }
+            "offline" -> { clearToolArt(); if (thinking) { thinking = false; moodUntil = 0 }; showSub(OFFLINE, 4000, now) }
         }
     }
 

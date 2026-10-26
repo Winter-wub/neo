@@ -45,10 +45,17 @@ Baseline: [contract.md](contract.md) §1–§3 and §7, kept as it is. The only 
 
 | Change | Source |
 |---|---|
-| Port 8000 serves **only NeoApp's routes**. Every request needs a device token except `/api/hello`, `/api/pair`, `/neo.apk`. Localhost has no special rights (closes the open `POST /api/face` and the token-less `/api/events`). A phone on adb reverse must be paired. | [transport](issues/05-command-to-daemon-transport.md) |
+| Port 8000 serves **NeoApp's routes and, since 2026-10-26, the phone settings routes below** (nothing else). Every request needs a device token except `/api/hello`, `/api/pair`, `/neo.apk`. Localhost has no special rights (closes the open `POST /api/face` and the token-less `/api/events`). A phone on adb reverse must be paired. | [transport](issues/05-command-to-daemon-transport.md), [ticket 24](../neo-build/issues/24-phone-settings-api.md) |
 | `/api/cancel` and `/api/ask` are not on port 8000. `/api/ask` → 404, so the debug intent shows `askerr`. | [drops](issues/10-what-the-rewrite-drops.md) |
 | Inside any event payload, a `"ping"` string token is written as `"ping"`. The real ping stays exactly `{"type":"ping"}`. | [drops](issues/10-what-the-rewrite-drops.md) |
 | STT failures use the existing `stterr` event. No new event types. | [STT](issues/08-where-stt-lives.md) |
+
+**Phone settings routes (decided with the user 2026-10-26, [ticket 24](../neo-build/issues/24-phone-settings-api.md)).** A paired NeoApp can do over port 8000 what Neo Console does through the neo command: status, settings (all of them, `bypass` included), brains and models, custom providers with API keys, pet name and wake-word training, face colours, devices (list and revoke, itself too), jobs, memory, journal and dreams. This reverses "port 8000 serves only NeoApp's routes" for exactly these routes.
+- They are the command-socket routes under `/api` with the same bodies and replies: `GET /api/settings`, `POST /api/providers/config`, … The list is `PHONE_SETTINGS_ROUTES` in `protocol.ts`; a route not in it stays Mac-only (`/api/say`, `/api/cancel`, `/api/doctor`, `devices/pair`, the `…/clear` wipes, the raw `jobs/file`). Shapes come from `protocol.ts` and are generated into `Protocol.kt` (`Neo…` reply types, `…Request` types).
+- **Security decision: the device token is the trust boundary.** Anyone holding a paired phone's token may change any setting, turn on `bypass` and add or replace an API key. Revoking the device is the remedy, and works from any phone (itself included: its event stream ends and the next request is 401).
+- **API keys go in, never come back out.** Replies and events carry only "has key" (`keys` in `GET /api/providers/config`); a key is written 0600 to NEO_HOME.
+- `GET /api/devices` marks the caller's own row (`self`). `POST /api/pet` stays the phone's own hunger report; `/api/face` now needs a token.
+- A change from a phone publishes the same events Neo Console sees (`settings`, `idle`, `provider`, `model`, `wake`, `train`, `face`, `jobs`, `devices`, `changed`, …). The one exception is `status`, which is for consoles and is never sent to a phone.
 
 Quirks to keep, per contract §8.1:
 - streams that never close: turn off the Bun idle timeout on `/api/events` and `/api/audio`;
@@ -246,7 +253,8 @@ Sources: [cutover](issues/07-cutover-and-parity.md), [modules](issues/04-neocli-
 ## 16. Out of scope
 
 - A redesign of the NeoApp protocol (e.g. a single WebSocket).
-- Any other NeoApp behaviour change.
+- Phone control of the daemon beyond the §4.1 settings routes: `neo say`/`cancel`, `doctor`, starting a pairing, wiping memory/journal/dreams/jobs, editing the raw `jobs.md`. (Phone settings, brains, API keys, jobs, memory and device revoke **are** in scope since 2026-10-26: §4.1.)
+- Any other NeoApp behaviour change (NeoApp screens for the new routes are tickets 25 and 26).
 - NeoCli on Linux or Windows.
 - Distributing to other Macs (Developer ID, notarization, a downloadable zip).
 - `SpeechAnalyzer`.

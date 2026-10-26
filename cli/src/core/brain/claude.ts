@@ -138,7 +138,7 @@ export function createClaudeBrain(options: ClaudeBrainOptions): Brain {
           ...(model ? ['--model', model] : []),
           ...(bypass
             ? ['--permission-mode', 'bypassPermissions', '--add-dir', homeDir, '--mcp-config', mcpFile]
-            : ['--strict-mcp-config', '--mcp-config', mcpFile, '--tools', 'WebSearch,WebFetch,Skill', '--allowedTools', ALLOWED_TOOLS]),
+            : ['--strict-mcp-config', '--mcp-config', mcpFile, '--tools', 'WebSearch,WebFetch,Skill', '--allowedTools', ...ALLOWED_TOOLS.split(',')]),
           ...(resume ? ['--resume', resume] : []),
         ]
         const prompt = resume ? followUpPrompt(text, context.notes) : askPrompt(text, context, bypass ? 'agent' : 'claude', bypass)

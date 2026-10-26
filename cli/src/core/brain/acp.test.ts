@@ -176,3 +176,94 @@ test('skills are not an agent thing', async () => {
   const reply = await brain.runSkill({ skill: 's', plan: 'p', task: 't', petName: 'จอห์น', signal: new AbortController().signal, onTool() {} })
   expect(reply.answer).toMatchObject({ type: 'error' })
 })
+
+const CLAUDE_ACP = { FAKE_AGENT_NAME: '@agentclientprotocol/claude-agent-acp' }
+const withMemory = (over: Partial<AskRequest['context']> = {}) => ({ petName: 'จอห์น', wakeVariants: ['จอห์น'], memory: 'ชอบกาแฟ', notes: ['ผู้ใช้: เมื่อกี้'], now: new Date(2026, 9, 26, 9, 5), ...over })
+
+test('claude-agent-acp: persona, memory, tools and card format go in _meta.systemPrompt.append; the prompt is only the user\'s words', async () => {
+  const { brain, calls } = await setup({}, CLAUDE_ACP)
+  const reply = await brain.ask(request('John คุณชื่ออะไร', { context: withMemory() }))
+  expect(lines(reply)).toContain('fresh true') // the agent saw the persona, via the system prompt
+  const all = await calls()
+  const created = all.find(c => c.method === 'session/new')!
+  expect(Object.keys(created.params._meta)).toEqual(['systemPrompt'])
+  const append: string = created.params._meta.systemPrompt.append
+  expect(Object.keys(created.params._meta.systemPrompt)).toEqual(['append'])
+  for (const part of ['คุณคือ "จอห์น"', 'ชอบกาแฟ', 'ผู้ใช้: เมื่อกี้', 'neo-agents', '"layout"']) expect(append).toContain(part)
+  expect(append).not.toContain('John คุณชื่ออะไร')
+  expect(all.find(c => c.method === 'session/prompt')!.params.prompt).toEqual([{ type: 'text', text: 'John คุณชื่ออะไร' }])
+})
+
+test('the system prompt is rebuilt for each new conversation; follow-ups reuse the session and send no new one', async () => {
+  const { brain, calls } = await setup({}, CLAUDE_ACP)
+  const first = await brain.ask(request('หนึ่ง', { context: withMemory({ memory: 'จำเก่า' }) }))
+  const follow = await brain.ask(request('สอง', { resume: first.session, context: withMemory({ memory: 'จำใหม่' }) }))
+  expect(follow.session).toBe(first.session)
+  const fresh = await brain.ask(request('สาม', { resume: null, context: withMemory({ memory: 'จำใหม่', petName: 'มิ้นท์' }) }))
+  expect(fresh.session).not.toBe(first.session)
+  const all = await calls()
+  const created = all.filter(c => c.method === 'session/new')
+  expect(created).toHaveLength(2)
+  expect(created[0]!.params._meta.systemPrompt.append).toContain('จำเก่า')
+  expect(created[1]!.params._meta.systemPrompt.append).toContain('จำใหม่')
+  expect(created[1]!.params._meta.systemPrompt.append).toContain('คุณคือ "มิ้นท์"')
+  const prompts = all.filter(c => c.method === 'session/prompt').map(c => c.params.prompt[0].text as string)
+  expect(prompts[0]).toBe('หนึ่ง')
+  expect(prompts[1]).toContain('ผู้ใช้พูดต่อ: "สอง"')
+  expect(prompts[2]).toBe('สาม')
+})
+
+test('an agent that does not take a system prompt gets no _meta and the whole prompt, as before', async () => {
+  const { brain, calls } = await setup({}, { FAKE_AGENT_NAME: 'opencode' })
+  await brain.ask(request('สวัสดี', { context: withMemory() }))
+  const all = await calls()
+  expect(all.find(c => c.method === 'session/new')!.params._meta).toBeUndefined()
+  const text: string = all.find(c => c.method === 'session/prompt')!.params.prompt[0].text
+  expect(text).toContain('คุณคือ "จอห์น"')
+  expect(text).toContain('ชอบกาแฟ')
+  expect(text).toContain('สวัสดี')
+})
+
+test('listing models opens a session without a system prompt', async () => {
+  const { brain, calls } = await setup({}, CLAUDE_ACP)
+  await brain.listModels()
+  expect((await calls()).find(c => c.method === 'session/new')!.params._meta).toBeUndefined()
+})
+
+test('bypass on: the session ends up in the permissive mode and nobody is asked; bypass off: write actions still ask', async () => {
+  const asked: PermissionRequest[] = []
+  const confirm = async (r: PermissionRequest) => (asked.push(r), false)
+  const { brain, calls } = await setup({}, { ...CLAUDE_ACP, FAKE_MODES: 'default,acceptEdits,plan,bypassPermissions' })
+  const on = await brain.ask(request('PERM', { bypass: true, confirm }))
+  expect(lines(on)).toEqual(expect.arrayContaining(['mode bypassPermissions', 'perm yes']))
+  expect(asked).toEqual([])
+  const off = await brain.ask(request('PERM', { bypass: false, confirm }))
+  expect(lines(off)).toEqual(expect.arrayContaining(['mode -', 'perm no']))
+  expect(asked).toHaveLength(1)
+  const created = (await calls()).filter(c => c.method === 'session/new')
+  expect(created).toHaveLength(2) // the toggle opened a new session, with the same system prompt in each
+})
+
+test('a side ask runs in a session of its own: the conversation resumes its session and gets no side text or tools', async () => {
+  const { brain, calls } = await setup()
+  const first = await brain.ask(request('หนึ่ง'))
+  const drawn = request('วาด', { side: true })
+  const side = await brain.ask(drawn)
+  expect(side.session).not.toBe(first.session)
+  expect(lines(side)).toEqual(expect.arrayContaining(['sid S2', 'fresh true']))
+  expect(drawn.tools).toEqual([['Search the web', 'search']])
+  const second = await brain.ask(request('สอง', { resume: first.session }))
+  expect(lines(second)).toEqual(expect.arrayContaining(['sid S1', 'fresh false']))
+  expect(second.session).toBe(first.session)
+  const prompts = (await calls()).filter(c => c.method === 'session/prompt')
+  expect(prompts.map(p => p.params.sessionId)).toEqual(['S1', 'S2', 'S1'])
+})
+
+test('a side ask and a conversation ask can run at once without mixing their text or tools', async () => {
+  const { brain } = await setup()
+  const first = await brain.ask(request('หนึ่ง'))
+  const [side, chat] = await Promise.all([brain.ask(request('วาด', { side: true })), brain.ask(request('สอง', { resume: first.session }))])
+  expect(lines(side)).toContain('sid S2')
+  expect(lines(chat)).toContain('sid S1')
+  expect(chat.session).toBe('S1')
+})

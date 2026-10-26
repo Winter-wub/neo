@@ -215,3 +215,17 @@ test('a broken providers.json is reported and ignored instead of crashing', asyn
   expect(hub.list().list.map(p => p.name)).toEqual(['claude'])
   expect(logged[0]).toContain('providers.json อ่านไม่ได้')
 })
+
+test('the switch card uses the pet name core passes in', async () => {
+  const { hub } = await setup({ petName: () => 'จอห์น' })
+  await hub.refresh()
+  expect((await hub.use('fakeagent'))).toMatchObject({ lines: ['ต่อจากนี้ จอห์น ถาม Fake Agent แทน', 'พูด "สลับไปใช้ …" เพื่อเปลี่ยนอีก'] })
+})
+
+test('a long model id does not get cut in the card title; the full id goes in the lines', async () => {
+  const { hub } = await setup()
+  const long = await hub.useModel('opencode/deepseek-v4.1-flash-free')
+  expect(long).toMatchObject({ title: 'เปลี่ยนโมเดล', lines: ['Claude Code', 'opencode/deepseek-v4.1-flash-free'] })
+  expect(await hub.useModel('opencode/gpt-5')).toMatchObject({ title: 'gpt-5', lines: ['Claude Code', 'opencode/gpt-5'] })
+  expect(await hub.useModel('opencode/gpt-5-mini-x')).toMatchObject({ title: 'gpt-5-mini-x', lines: ['Claude Code', 'opencode/gpt-5-mini-x'] })
+})

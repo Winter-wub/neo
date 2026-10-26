@@ -61,3 +61,62 @@ test('an ordinary question after the name still goes to the Brain', async () => 
   await t.conversation.hear('นีโอ ราคาทองวันนี้เท่าไหร่')
   expect(t.asked).toEqual(['ราคาทองวันนี้เท่าไหร่'])
 })
+
+// ---- rename by voice (ticket 30): the fast-phrase order and the confirm / reply flow ----
+import { textCard } from '../cards/cards'
+import { createIdentity } from '../pet/identity'
+import { createRename } from '../pet/rename'
+import { CONFIRM_MS, FOLLOW_MS } from './conversation'
+
+function renameSetup() {
+  const clock = new FakeClock()
+  const events = createEvents({ clock })
+  const log: NeoEvent[] = []
+  events.subscribe(e => log.push(e))
+  const saved = new Map<string, unknown>()
+  const identity = createIdentity({ events, store: { read: k => saved.get(k), write: async (k, v) => void saved.set(k, v) } })
+  const asked: string[] = []
+  const brain: Brain = { label: 'Fake', ask: async r => (asked.push(r.text), { answer: { type: 'card', card: textCard({ title: 'brain', lines: ['x'] }) }, session: null }), runSkill: async () => { throw new Error('no') } }
+  const rename = createRename({ identity })
+  const conversation = createConversation({ events, clock, brain, settings: () => ({ requireName: true, followUp: true, bypass: true }), pet: identity.wake, fast: [rename.understand] })
+  const say = async (text: string) => (await conversation.hear(text), log.at(-1))
+  return { conversation, clock, log, asked, identity, say }
+}
+
+test('rename: the phrase shows a confirm card with what was heard; ตกลง starts training; the Brain is never asked', async () => {
+  const t = renameSetup()
+  expect(await t.say('นีโอ เปลี่ยนชื่อเป็นมิว')).toMatchObject({ type: 'card', card: { title: 'เปลี่ยนชื่อเป็น “มิว” ใช่ไหม' } })
+  expect(await t.say('ตกลง')).toMatchObject({ type: 'card', card: { title: expect.stringContaining('มิว') } })
+  expect(t.identity.wake().training).toMatchObject({ name: 'มิว' })
+  expect(t.asked).toEqual([])
+})
+
+test('rename: "ไม่" or too late cancels; the name is untouched', async () => {
+  const t = renameSetup()
+  await t.say('นีโอ เปลี่ยนชื่อเป็นมิว')
+  expect(await t.say('ไม่')).toMatchObject({ type: 'cancelled' })
+  await t.say('นีโอ เปลี่ยนชื่อเป็นมิว')
+  t.clock.advance(CONFIRM_MS + 1)
+  await t.say('ตกลง')
+  expect(t.identity.wake()).toMatchObject({ name: 'นีโอ', training: null })
+})
+
+test('rename without a name asks, and the next sentence (no name needed) is the name', async () => {
+  const t = renameSetup()
+  expect(await t.say('นีโอ เปลี่ยนชื่อหน่อย')).toMatchObject({ card: { title: 'อยากให้ชื่ออะไร' } })
+  expect(await t.say('มิว')).toMatchObject({ card: { title: 'เปลี่ยนชื่อเป็น “มิว” ใช่ไหม' } })
+})
+
+test('rename without a name: silence past the follow-up window drops the question', async () => {
+  const t = renameSetup()
+  await t.say('นีโอ เปลี่ยนชื่อหน่อย')
+  t.clock.advance(FOLLOW_MS + 1)
+  expect(await t.say('มิว')).toMatchObject({ type: 'heard' })
+  expect(t.identity.wake().training).toBeNull()
+})
+
+test('"คุณชื่ออะไร" goes to the Brain, not the rename flow', async () => {
+  const t = renameSetup()
+  await t.say('นีโอ คุณชื่ออะไร')
+  expect(t.asked).toEqual(['คุณชื่ออะไร'])
+})

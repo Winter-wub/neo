@@ -2,5 +2,7 @@
   "type": "tool",
   "name": "WebSearch",
   "input": "{\"query\":\"ข่าววันนี้มีอะไร\"}",
+  "key": "WebSearch",
+  "animation": null,
   "at": 1700000000000
 }

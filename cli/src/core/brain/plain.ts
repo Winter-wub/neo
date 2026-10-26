@@ -71,10 +71,18 @@ export function createOpenAiBrain(options: PlainOptions): Provider {
     label,
     ask: request =>
       guard(async () => {
-        const fresh = request.resume === null || history.length === 0
-        if (fresh) history.length = 0
         const model = options.model?.() ?? cfg.model
         if (!model) throw new Failure(`${label}: ยังไม่ได้เลือกโมเดล — เลือกด้วย neo model use`)
+        if (request.side) {
+          // a side ask has a one-message history of its own: the conversation's history is left alone
+          const messages = [{ role: 'user', content: askPrompt(request.text, request.context, 'plain', request.bypass) }]
+          const res = await post(label, `${base}/chat/completions`, authHeaders(cfg, env, homeDir), { model, messages, temperature: TEMPERATURE }, request, timeoutMs)
+          if (!res.ok) throw await failedStatus(label, res)
+          const json: any = await res.json().catch(() => ({}))
+          return { answer: parseLoose(json?.choices?.[0]?.message?.content ?? '', request.context.petName), session: null }
+        }
+        const fresh = request.resume === null || history.length === 0
+        if (fresh) history.length = 0
         history.push({ role: 'user', content: fresh ? askPrompt(request.text, request.context, 'plain', request.bypass) : followUpPrompt(request.text, request.context.notes) })
         try {
           const res = await post(label, `${base}/chat/completions`, authHeaders(cfg, env, homeDir), { model, messages: history, temperature: TEMPERATURE }, request, timeoutMs)
@@ -108,14 +116,16 @@ export function createHttpBrain(options: PlainOptions): Provider {
     label,
     ask: request =>
       guard(async () => {
-        const fresh = request.resume === null
+        const side = request.side === true
+        const fresh = side || request.resume === null
+        const resume = side ? null : request.resume
         const model = options.model?.() ?? cfg.model ?? null
         const prompt = fresh ? askPrompt(request.text, request.context, 'plain', request.bypass) : followUpPrompt(request.text, request.context.notes)
-        const res = await post(label, cfg.url ?? '', authHeaders(cfg, env, homeDir), { text: request.text, prompt, sessionId: request.resume, fresh, model }, request, timeoutMs)
+        const res = await post(label, cfg.url ?? '', authHeaders(cfg, env, homeDir), { text: request.text, prompt, sessionId: resume, fresh, model }, request, timeoutMs)
         if (!res.ok) throw await failedStatus(label, res)
         const json: any = await res.json().catch(() => ({}))
         const answer = json.card ? parseAnswer(JSON.stringify(json.card)) : parseLoose(String(json.text ?? json.reply ?? ''), request.context.petName)
-        return { answer, session: String(json.sessionId ?? request.resume ?? CHAT_SESSION) }
+        return { answer, session: side ? null : String(json.sessionId ?? request.resume ?? CHAT_SESSION) }
       }),
     runSkill: noSkills(label),
     // a custom endpoint has no standard way to list models: the names set in `models` are all there is

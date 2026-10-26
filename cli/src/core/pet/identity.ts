@@ -1,5 +1,6 @@
 import type { Face, WakeInfo } from '../../protocol'
-import { DEFAULT_PET_NAME, DEFAULT_WAKE } from '../conversation/phrases'
+import { textCard } from '../cards/cards'
+import { CANCEL, DEFAULT_PET_NAME, DEFAULT_WAKE } from '../conversation/phrases'
 import type { Events } from '../events/events'
 import { SettingsError } from '../settings/settings'
 
@@ -20,7 +21,7 @@ export interface IdentityDeps {
 
 /** The pet's name, the ways the recogniser writes it, and the face colours: what the phone shows and listens for. */
 export function createIdentity({ events, store }: IdentityDeps) {
-  let training: { name: string; got: string[] } | null = null
+  let training: { name: string; got: string[]; introduce: boolean } | null = null
 
   const savedWake = (): { name: string; variants: string[] } => {
     const saved = store.read('wake') as { name?: unknown; variants?: unknown } | undefined
@@ -60,10 +61,10 @@ export function createIdentity({ events, store }: IdentityDeps) {
       return next
     },
     /** `neo name train`: the next three transcripts are the name as the recogniser writes it. */
-    async train(name: string) {
+    async train(name: string, { introduce = false } = {}) {
       const clean = String(name).trim().slice(0, NAME_MAX)
       if (!clean) throw new SettingsError('ต้องระบุชื่อที่จะฝึก')
-      training = { name: clean, got: [] }
+      training = { name: clean, got: [], introduce }
       events.publish({ type: 'train', name: clean, n: 0 })
     },
     cancelTraining() {
@@ -75,11 +76,18 @@ export function createIdentity({ events, store }: IdentityDeps) {
     async hearing(text: string) {
       if (!training) return false
       const session = training
+      if (CANCEL.test(text)) {
+        training = null
+        events.publish({ type: 'cancelled' })
+        if (session.introduce) events.publish({ type: 'card', card: textCard({ title: 'ยกเลิกเปลี่ยนชื่อ', lines: [`ยังใช้ชื่อ ${savedWake().name} เหมือนเดิม`], emotion: 'neutral', sounds: ['greet'] }) })
+        return true
+      }
       session.got.push(text)
       events.publish({ type: 'train', name: session.name, n: session.got.length, text })
       if (session.got.length >= TRAINING_SAMPLES) {
         training = null
         await setWake(session.name, session.got.map(got => got.replace(TRAILING, '')))
+        if (session.introduce) events.publish({ type: 'card', card: textCard({ title: `ฉันชื่อ ${session.name} นะ`, lines: ['จำชื่อใหม่ได้แล้ว', `เรียก “${session.name}” ได้เลย`], emotion: 'happy', sounds: ['happy'] }) })
       }
       return true
     },

@@ -65,6 +65,8 @@ export function eventLine(event: NeoEvent) {
       return `${time}  devices   รายการมือถือเปลี่ยน`
     case 'changed':
       return `${time}  changed   ${event.file === 'memory' ? 'memory.md' : event.file === 'dream' ? `dreams/${event.id ?? ''}.md` : `journal/${event.day ?? ''}.md`} เปลี่ยน`
+    case 'animation':
+      return `${time}  animation ${event.tool} ${event.animation ? `วาดเสร็จ (${event.animation.w}×${event.animation.h}, ${event.animation.frames.length} เฟรม)` : 'ลบแล้ว'}`
     case 'provider':
       return `${time}  provider  ${event.label} (${event.name})`
     case 'model':

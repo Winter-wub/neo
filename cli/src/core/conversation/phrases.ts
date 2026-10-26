@@ -26,7 +26,7 @@ export function afterWake(text: string, wake: RegExp) {
 /** Said to a pending confirmation: go ahead. */
 export const CONFIRM = /ตกลง|โอเค|\bok(?:ay)?\b|ยืนยัน|ทำเลย|เอาเลย|จัดไป|ใช่|ตั้งเลย|ได้เลย|ถูกต้อง/i
 /** While working or waiting for a confirmation: stop. */
-export const CANCEL = /ยกเลิก|ไม่ใช่|ไม่ตั้ง|ไม่เอา|หยุด|พอแล้ว|พอก่อน|ไม่เอาแล้ว|ไม่ต้องหา|เลิกหา|ไม่ต้องแล้ว|\bcancel\b|\bstop\b/i
+export const CANCEL = /ยกเลิก|ไม่ใช่|ไม่ตั้ง|ไม่เอา|หยุด|พอแล้ว|พอก่อน|ไม่เอาแล้ว|ไม่ต้องหา|เลิกหา|ไม่ต้องแล้ว|\bcancel\b|\bstop\b|^ไม่(?:ครับ|ค่ะ|คะ|นะ)?[\s.!]*$/i
 /** "start over" phrases: a new Brain session and forgotten notes. */
 export const RESET = /^(?:เริ่ม(?:คุย)?ใหม่|เริ่มบทสนทนาใหม่|ลืม(?:ที่คุย|ทั้งหมด)?)/
 

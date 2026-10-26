@@ -7,3 +7,4 @@ android/local.properties
 voice-samples/**/*.wav
 .DS_Store
 app/mac/build/
+voice-samples/

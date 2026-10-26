@@ -176,8 +176,8 @@ describe('amended contract: token on every phone route, even from localhost', ()
     expect(typeof res.json.error).toBe('string')
   })
 
-  test('Mac-only routes never answer 200 to a paired phone', async () => {
-    for (const [method, path] of [['GET', '/api/settings'], ['GET', '/api/devices'], ['POST', '/api/say'], ['POST', '/api/pair/start'], ['GET', '/api/doctor']] as const) {
+  test('Mac-only routes (say, pairing start, doctor) never answer 200 to a paired phone', async () => {
+    for (const [method, path] of [['POST', '/api/say'], ['POST', '/api/pair/start'], ['GET', '/api/doctor']] as const) {
       const res = await s.phone.request(method, path, method === 'POST' ? { text: 'x' } : undefined)
       expect(res.status, `${method} ${path}`).toBeGreaterThanOrEqual(400)
     }

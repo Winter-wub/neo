@@ -7,7 +7,7 @@ import type { ProviderConfig } from '../../protocol'
 import type { AskRequest, ModelInfo, PermissionRequest, Provider, Reply, SkillRequest } from './brain'
 import { childEnv } from './child-env'
 import { parseLoose } from './parse'
-import { askPrompt, followUpPrompt } from './prompts'
+import { askPrompt, followUpPrompt, systemPrompt } from './prompts'
 
 const MINUTE = 60_000
 export const ACP_TIMEOUT_MS = 15 * MINUTE
@@ -30,6 +30,9 @@ export function pickMode(ids: readonly string[]): string | null {
   }
   return null
 }
+
+/** Agents that take `_meta.systemPrompt` on `session/new` (claude-agent-acp, by the `agentInfo.name` it announces). Others get the persona in the first prompt. */
+export const takesSystemPrompt = (agentName: unknown) => typeof agentName === 'string' && /claude/i.test(agentName)
 
 export interface AcpMcpServer {
   name: string
@@ -76,12 +79,14 @@ export function createAcpBrain(options: AcpOptions): Provider {
 
   let rpc: Rpc | null = null
   let ready: Promise<Rpc> | null = null
+  /** What the agent called itself in `initialize`. */
+  let agentName: string | null = null
   /** The session Conversation is continuing, if any. */
   let session: { id: string; bypass: boolean; applied: string | null } | null = null
   let modelVia: 'models' | 'config' | null = null
   let modelList: ModelInfo[] | null = null
-  let text = ''
-  let run: { onTool: AskRequest['onTool']; confirm: AskRequest['confirm']; bypass: boolean } | null = null
+  /** What each open session is being asked right now (by session id): the conversation's and a side drawing's never mix. */
+  const turns = new Map<string, { text: string; run: { onTool: AskRequest['onTool']; confirm: AskRequest['confirm']; bypass: boolean } }>()
 
   function spawnRpc(): Rpc {
     const proc = spawn(cfg.command ?? '', cfg.args ?? [], { cwd, env: childEnv(options.env, options.claudeConfigDir?.()), stdio: ['pipe', 'pipe', 'pipe'] })
@@ -112,7 +117,9 @@ export function createAcpBrain(options: AcpOptions): Provider {
         rpc = null
         ready = null
         session = null
+        turns.clear()
         modelVia = null
+        agentName = null
       }
       for (const waiter of pending.values()) waiter.reject(new Failure(`${label}: ${why}`))
       pending.clear()
@@ -148,9 +155,10 @@ export function createAcpBrain(options: AcpOptions): Provider {
   }
 
   function onUpdate({ sessionId, update }: { sessionId?: string; update?: any }) {
-    if (!update || !session || sessionId !== session.id) return
-    if (update.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') text += update.content.text
-    else if (update.sessionUpdate === 'tool_call') run?.onTool(update.title || update.kind || 'tool', update.kind || '')
+    const turn = sessionId ? turns.get(sessionId) : undefined
+    if (!update || !turn) return
+    if (update.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') turn.text += update.content.text
+    else if (update.sessionUpdate === 'tool_call') turn.run.onTool(update.title || update.kind || 'tool', update.kind || '')
   }
 
   async function onPermission(from: Rpc, message: any) {
@@ -158,7 +166,7 @@ export function createAcpBrain(options: AcpOptions): Provider {
     const options_: Array<{ kind: string; optionId: string }> = message.params?.options ?? []
     const pick = (kinds: string[]) => options_.find(o => kinds.includes(o.kind))?.optionId
     const title = String(toolCall.title || toolCall.kind || 'ทำงาน').slice(0, TOOL_TITLE_MAX)
-    const current = run
+    const current = (message.params?.sessionId ? turns.get(message.params.sessionId) : undefined)?.run
     let allowed = Boolean(current && (current.bypass || READ_KINDS.has(toolCall.kind) || isReadTool(title)))
     if (!allowed && current?.confirm) {
       const request: PermissionRequest = { title, kind: toolCall.kind, agent: label }
@@ -177,14 +185,21 @@ export function createAcpBrain(options: AcpOptions): Provider {
     rpc = mine
     ready = mine
       .request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } })
-      .then(() => mine)
+      .then(init => {
+        agentName = init?.agentInfo?.name ?? null
+        return mine
+      })
     ready.catch(() => {}) // the caller sees it
     return ready
   }
 
   /** `session/new`, and learn the models the agent offers (opencode: configOptions, claude-code-acp: models). */
-  async function newSession(from: Rpc) {
-    const result = await from.request('session/new', { cwd, mcpServers: (await options.mcpServers?.()) ?? [] })
+  async function newSession(from: Rpc, system?: string) {
+    const result = await from.request('session/new', {
+      cwd,
+      mcpServers: (await options.mcpServers?.()) ?? [],
+      ...(system ? { _meta: { systemPrompt: { append: system } } } : {}),
+    })
     const modelOption = (result.configOptions ?? []).find((o: any) => o.id === 'model')
     if (modelOption) {
       modelVia = 'config'
@@ -196,8 +211,9 @@ export function createAcpBrain(options: AcpOptions): Provider {
     return result
   }
 
-  async function openSession(from: Rpc, bypass: boolean) {
-    const result = await newSession(from)
+  type Open = { id: string; bypass: boolean; applied: string | null }
+  async function openSession(from: Rpc, bypass: boolean, system?: string, side = false): Promise<Open> {
+    const result = await newSession(from, system)
     const id: string = result.sessionId
     const setOption = (configId: string, value: string) =>
       from.request('session/set_config_option', { sessionId: id, configId, value })
@@ -215,32 +231,35 @@ export function createAcpBrain(options: AcpOptions): Provider {
           .then(() => log(`${label} โหมด ${mode}`), e => log(`${label} ตั้งโหมด ${mode} ไม่ได้: ${e.message}`))
       }
     }
-    session = { id, bypass, applied: null }
-    return session
+    const opened: Open = { id, bypass, applied: null }
+    if (!side) session = opened
+    return opened
   }
 
   /** Switch the agent's model when the choice changed (also mid-conversation). */
-  async function applyModel(from: Rpc) {
+  async function applyModel(from: Rpc, target: Open | null) {
     const want = options.model?.() ?? null
-    if (!session || !want || want === session.applied) return
-    const { id } = session
+    if (!target || !want || want === target.applied) return
+    const { id } = target
     const done = modelVia === 'models'
       ? from.request('session/set_model', { sessionId: id, modelId: want })
       : from.request('session/set_config_option', { sessionId: id, configId: 'model', value: want })
-    await done.then(() => void (session && (session.applied = want)), e => log(`${label} เปลี่ยนโมเดลเป็น ${want} ไม่ได้: ${e.message}`))
+    await done.then(() => void (target.applied = want), e => log(`${label} เปลี่ยนโมเดลเป็น ${want} ไม่ได้: ${e.message}`))
   }
 
   async function prompt(request: AskRequest): Promise<Reply> {
     const { signal } = request
     if (signal.aborted) throw new Failure('interrupted')
     const from = await ensure()
-    const fresh = !(request.resume && session && request.resume === session.id && session.bypass === request.bypass)
-    if (fresh) await openSession(from, request.bypass)
-    await applyModel(from)
-    const mine = session!
-    const body = fresh ? askPrompt(request.text, request.context, 'agent', request.bypass) : followUpPrompt(request.text, request.context.notes)
-    text = ''
-    run = { onTool: request.onTool, confirm: request.confirm, bypass: request.bypass }
+    const side = request.side === true
+    const fresh = side || !(request.resume && session && request.resume === session.id && session.bypass === request.bypass)
+    // the persona travels as the system prompt when the agent takes one: the user's turn is then only what they said
+    const system = fresh && takesSystemPrompt(agentName) ? systemPrompt(request.context, 'agent', request.bypass) : undefined
+    const mine = fresh ? await openSession(from, request.bypass, system, side) : session!
+    await applyModel(from, mine)
+    const body = system ? request.text : fresh ? askPrompt(request.text, request.context, 'agent', request.bypass) : followUpPrompt(request.text, request.context.notes)
+    const turn = { text: '', run: { onTool: request.onTool, confirm: request.confirm, bypass: request.bypass } }
+    turns.set(mine.id, turn)
     let stop = () => {}
     try {
       const stopped = new Promise<never>((_, reject) => {
@@ -261,10 +280,10 @@ export function createAcpBrain(options: AcpOptions): Provider {
       stopped.catch(() => {})
       const result = await Promise.race([from.request('session/prompt', { sessionId: mine.id, prompt: [{ type: 'text', text: body }] }), stopped])
       if (result?.stopReason === 'cancelled') throw new Failure('interrupted')
-      return { answer: parseLoose(text, request.context.petName), session: mine.id }
+      return { answer: parseLoose(turn.text, request.context.petName), session: mine.id }
     } finally {
       stop()
-      run = null
+      turns.delete(mine.id)
     }
   }
 

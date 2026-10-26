@@ -159,3 +159,15 @@ test('the phone stream never carries `status` events (those are for consoles), e
   await up.response
   expect(t.seen.map(e => e.type)).not.toContain('status')
 })
+
+test('revoking the phone ends its open upload right away, the mic stops counting as a phone', async () => {
+  const t = await setup()
+  const up = t.upload()
+  up.write(quiet())
+  await Bun.sleep(100)
+  expect(t.core.status().phone).toBe(true)
+  t.core.devices.revoke(t.core.devices.list()[0]!.id)
+  const ended = await Promise.race([up.response.then(r => r.status), Bun.sleep(2000).then(() => 'still open' as const)])
+  expect(ended).toBe(200)
+  expect(t.core.status().phone).toBe(false)
+})

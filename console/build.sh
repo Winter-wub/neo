@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the DEV Neo Console: console/build/Neo Console Dev.app
+# Builds Neo Console: the dev app (default, console/build/Neo Console Dev.app) or, with NEO_FLAVOR=release, the real one
 #   - its own bundle id, LaunchAgent label, NEO_HOME, bin dir, log dir and phone port, so it can sit next to the
 #     real Neo (com.mochi.neo, ~/Library/Application Support/Neo, port 8000) without touching it;
 #   - bundles cli/dist/neo as Contents/MacOS/neo (builds it with `cd cli && bun run build` only when missing);
@@ -9,14 +9,20 @@ set -euo pipefail
 cd "$(dirname "$0")"
 CONSOLE="$PWD"; REPO="$(cd .. && pwd)"
 
-IDENTITY="${NEO_SIGN_IDENTITY:-<Apple Development identity>}"
+# the first Apple Development certificate in the keychain unless NEO_SIGN_IDENTITY says otherwise
+IDENTITY="${NEO_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)}"
+[ -n "$IDENTITY" ] || { echo "no Apple Development certificate in the keychain: set NEO_SIGN_IDENTITY" >&2; exit 1; }
 [ "$IDENTITY" = "-" ] && { echo "ad hoc signing is not allowed" >&2; exit 1; }
 
-NAME="Neo Console Dev"
-BUNDLE_ID="com.mochi.neo.console.dev"
-LABEL="com.mochi.neo.dev"
-PORT=8100
-SUPPORT="$HOME/Library/Application Support/NeoDev"
+# NEO_FLAVOR=release builds the real Neo Console: bundle id com.mochi.neo, label com.mochi.neo, port 8000, the real
+# NEO_HOME, ~/.local/bin/neo and ~/Library/Logs/Neo. Anything else builds the dev app that sits beside it.
+if [ "${NEO_FLAVOR:-dev}" = release ]; then
+  NAME="Neo Console"; BUNDLE_ID="com.mochi.neo"; LABEL="com.mochi.neo"; PORT=8000
+  SUPPORT="$HOME/Library/Application Support/Neo"; BIN_DIR="$HOME/.local/bin"; LOG_DIR="$HOME/Library/Logs/Neo"; VERSION="0.1"
+else
+  NAME="Neo Console Dev"; BUNDLE_ID="com.mochi.neo.console.dev"; LABEL="com.mochi.neo.dev"; PORT=8100
+  SUPPORT="$HOME/Library/Application Support/NeoDev"; BIN_DIR="$SUPPORT/bin"; LOG_DIR="$HOME/Library/Logs/NeoDev"; VERSION="0.1-dev"
+fi
 APP="build/$NAME.app"; C="$APP/Contents"
 
 # the neo binary to bundle
@@ -32,6 +38,10 @@ cp "$NEO_SRC" "$C/MacOS/neo"
 # the speech helper the daemon starts (cli/stt/build.sh builds and signs it); without it `neo doctor` reports stt as missing
 STT_SRC="$REPO/cli/dist/neo-stt"
 if [ -x "$STT_SRC" ]; then cp "$STT_SRC" "$C/MacOS/neo-stt"; else echo "warning: $STT_SRC missing (cd cli/stt && ./build.sh): speech will not work" >&2; fi
+
+# the NeoApp APK served at /neo.apk (android: ./gradlew assembleDebug)
+APK_SRC="$REPO/android/app/build/outputs/apk/debug/app-debug.apk"
+if [ -f "$APK_SRC" ]; then cp "$APK_SRC" "$C/Resources/neo.apk"; else echo "warning: $APK_SRC missing: /neo.apk will 404" >&2; fi
 
 # what is the bundled neo? Ask it: run a throwaway daemon (temp home, random port) and read `neo daemon status`.
 PROBE="$(mktemp -d /tmp/neo-probe.XXXXXX)"
@@ -65,7 +75,7 @@ cat > "$C/Info.plist" <<PL
 <key>CFBundleName</key><string>$NAME</string><key>CFBundleDisplayName</key><string>$NAME</string>
 <key>CFBundleExecutable</key><string>NeoConsole</string><key>CFBundleIconFile</key><string>Neo</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.1-dev</string><key>CFBundleVersion</key><string>0.1-dev</string>
+<key>CFBundleShortVersionString</key><string>$VERSION</string><key>CFBundleVersion</key><string>$VERSION</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string><key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSSpeechRecognitionUsageDescription</key><string>Neo ถอดเสียงที่คุณพูดใส่มือถือเป็นข้อความในเครื่องนี้ (ไม่ส่งออกอินเทอร์เน็ต)</string>
@@ -75,8 +85,8 @@ cat > "$C/Info.plist" <<PL
 <key>NeoHome</key><string>$SUPPORT</string>
 <key>NeoLabel</key><string>$LABEL</string>
 <key>NeoPort</key><string>$PORT</string>
-<key>NeoBinDir</key><string>$SUPPORT/bin</string>
-<key>NeoLogDir</key><string>$HOME/Library/Logs/NeoDev</string>
+<key>NeoBinDir</key><string>$BIN_DIR</string>
+<key>NeoLogDir</key><string>$LOG_DIR</string>
 <key>NeoDaemonVersion</key><string>$DAEMON_VERSION</string>
 <key>NeoDaemonBuild</key><string>$DAEMON_BUILD</string>
 </dict></plist>

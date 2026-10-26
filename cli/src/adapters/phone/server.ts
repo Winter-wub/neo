@@ -3,11 +3,14 @@ import type { Clock } from '../../core/clock'
 import type { Core } from '../../core/core'
 import { PING_INTERVAL_MS, type HelloEvent, type PairAddress, type StreamLine } from '../../protocol'
 import { systemNetworks, systemTailscale, type Network, type TailscaleInfo } from './networks'
+import { phoneSettingsRoute, settingsFailure, settingsRouteOf } from './settings-routes'
 import { encodeLine } from './wire'
 
 export type { Network } from './networks'
 
 const MAX_BODY = 20_000
+/** memory.md and journal days are saved whole through the settings routes. */
+const MAX_SETTINGS_BODY = 1_000_000
 const REBIND_MS = 60_000
 const LOCALHOST = '127.0.0.1'
 
@@ -38,14 +41,21 @@ export async function startPhoneServer(options: PhoneServerOptions) {
     return { type: 'hello', thinking, provider, name: core.identity.wake().name, face: core.identity.face(), idle: core.settings.get().idle, ringing: core.jobs.ringing()?.title ?? null }
   }
 
-  function events() {
+  /** `deviceId`: the stream ends by itself when that phone is revoked (from the Mac or from any phone, itself included). */
+  function events(deviceId: string | undefined) {
     let detach = () => {}
     let stopPing = () => {}
+    let end = () => {}
     const encoder = new TextEncoder()
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const send = (line: StreamLine) => {
           try { controller.enqueue(encoder.encode(encodeLine(line))) } catch { /* phone already gone */ }
+        }
+        end = () => {
+          stopPing()
+          detach()
+          try { controller.close() } catch { /* phone already gone */ }
         }
         send(hello())
         // a dream the phone has not shown yet is told again on every connect, until /api/dream/seen
@@ -53,7 +63,10 @@ export async function startPhoneServer(options: PhoneServerOptions) {
         if (dream) send({ type: 'dream_done', at: dream.at, card: dream.card })
         stopPing = clock.every(pingMs, () => send({ type: 'ping' }))
         // `status` is for consoles; the phone never got it (contract: a muted mic means nothing but pings)
-        detach = core.attach(event => { if (event.type !== 'status') send(event) })
+        detach = core.attach(event => {
+          if (event.type === 'devices' && deviceId && !core.devices.list().some(device => device.id === deviceId)) return end()
+          if (event.type !== 'status') send(event)
+        })
       },
       cancel() {
         stopPing()
@@ -64,21 +77,37 @@ export async function startPhoneServer(options: PhoneServerOptions) {
   }
 
   /** NeoApp's mic: raw PCM s16le 16 kHz mono, 100 ms at a time, until the phone hangs up. */
-  async function audio(req: Request) {
+  async function audio(req: Request, deviceId: string | undefined) {
     const stream = core.ears.open()
+    // the upload never ends by itself: a revoked phone has to be cut off here, not at its next request
+    let revoked = () => {}
+    const cutOff = new Promise<'revoked'>(resolve => (revoked = () => resolve('revoked')))
+    const detach = core.attach(event => {
+      if (event.type === 'devices' && deviceId && !core.devices.list().some(device => device.id === deviceId)) revoked()
+    })
+    const chunks = req.body ? (req.body as unknown as AsyncIterable<Uint8Array>)[Symbol.asyncIterator]() : null
     try {
-      if (req.body) for await (const chunk of req.body as unknown as AsyncIterable<Uint8Array>) stream.push(chunk)
+      while (chunks) {
+        const next = await Promise.race([chunks.next(), cutOff])
+        if (next === 'revoked') {
+          void chunks.return?.().catch(() => {})
+          break
+        }
+        if (next.done) break
+        stream.push(next.value)
+      }
     } catch {
       // the phone dropped the connection
     } finally {
+      detach()
       stream.close()
     }
     return json({ ok: true })
   }
 
-  async function readBody(req: Request): Promise<Record<string, unknown>> {
+  async function readBody(req: Request, max = MAX_BODY): Promise<Record<string, unknown>> {
     const text = await req.text()
-    if (text.length > MAX_BODY) throw new BodyTooLarge()
+    if (text.length > max) throw new BodyTooLarge()
     return text ? JSON.parse(text) : {}
   }
 
@@ -108,11 +137,11 @@ export async function startPhoneServer(options: PhoneServerOptions) {
       }
       if (route === '/api/events' && req.method === 'GET') {
         srv.timeout(req, 0) // the stream stays open for hours with only a 15 s ping
-        return events()
+        return events(access.device?.id)
       }
       if (route === '/api/audio' && req.method === 'POST') {
         srv.timeout(req, 0) // the mic stays on for hours: one POST that never ends
-        return await audio(req)
+        return await audio(req, access.device?.id)
       }
       if (route === '/api/pet' && req.method === 'POST') {
         const { hunger, affection } = await readBody(req)
@@ -136,8 +165,15 @@ export async function startPhoneServer(options: PhoneServerOptions) {
         const minutes = typeof snooze === 'number' && snooze > 0 ? snooze : 0
         return json({ stopped: await core.jobs.stopAlarm(minutes ? 'เลื่อน' : 'แตะปิด', minutes) })
       }
+      const settingsRoute = settingsRouteOf(req.method, route)
+      if (settingsRoute) {
+        const { status, body } = await phoneSettingsRoute(core, settingsRoute, access.device?.id, () => readBody(req, MAX_SETTINGS_BODY))
+        return json(body, status)
+      }
       return fail('not found', 404)
     } catch (e) {
+      const refused = settingsFailure(e)
+      if (refused) return json(refused.body, refused.status)
       if (e instanceof BodyTooLarge) return fail('ข้อมูลใหญ่เกินไป', 413)
       if (e instanceof SyntaxError) return fail(e.message, 400)
       console.error('phone route failed:', route, e)

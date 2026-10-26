@@ -140,3 +140,25 @@ test('custom HTTP endpoint: a bad status is a typed error', async () => {
   const brain = createHttpBrain({ name: 'mine', cfg: { type: 'http', url: base, label: 'Mine' }, env: {} })
   expect((await brain.ask(request('hi'))).answer).toEqual({ type: 'error', error: 'Mine ตอบ 503 no' })
 })
+
+test('OpenAI-compatible: a side ask has a history of its own and leaves the conversation\'s alone', async () => {
+  const { seen, base } = endpoint(({ body }) => chat(JSON.stringify({ layout: 'text', title: 'msgs ' + body.messages.length, lines: [] })))
+  const brain = createOpenAiBrain({ name: 'local', cfg: { type: 'openai', baseUrl: `${base}/v1`, model: 'x' }, env: {} })
+  const a = await brain.ask(request('a'))
+  const side = await brain.ask(request('SIDEMARK', { side: true }))
+  expect(side.answer).toMatchObject({ card: { title: 'msgs 1' } })
+  const b = await brain.ask(request('b', { resume: a.session }))
+  expect(b.answer).toMatchObject({ card: { title: 'msgs 3' } }) // a, answer, b: nothing from the side ask
+  expect(seen[2]!.body.messages.map((m: any) => m.content).join()).not.toContain('SIDEMARK')
+})
+
+test('HTTP: a side ask is sent fresh without the conversation\'s session id and does not change it', async () => {
+  const { seen, base } = endpoint(({ body }) => Response.json({ sessionId: body.fresh ? `s${seen.length}` : body.sessionId, card: { layout: 'text', title: 't', lines: [] } }))
+  const brain = createHttpBrain({ name: 'h', cfg: { type: 'http', url: `${base}/ask` }, env: {} })
+  const a = await brain.ask(request('a'))
+  const side = await brain.ask(request('SIDEMARK', { side: true, resume: a.session }))
+  expect(seen[1]!.body).toMatchObject({ fresh: true, sessionId: null })
+  expect(side.session).toBeNull()
+  await brain.ask(request('b', { resume: a.session }))
+  expect(seen[2]!.body).toMatchObject({ fresh: false, sessionId: a.session })
+})

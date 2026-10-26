@@ -23,7 +23,7 @@
       "models": {
         "เร็ว": "m"
       },
-      "apiKeyFile": "/var/folders/cy/bb8qp2_x2033hxb7v274ky7w0000gp/T/neo-EmqUPq/router.key"
+      "apiKeyFile": "/var/folders/cy/bb8qp2_x2033hxb7v274ky7w0000gp/T/neo-EVEJiJ/router.key"
     }
   },
   "overrides": {
@@ -35,7 +35,7 @@
       "models": {
         "เร็ว": "m"
       },
-      "apiKeyFile": "/var/folders/cy/bb8qp2_x2033hxb7v274ky7w0000gp/T/neo-EmqUPq/router.key"
+      "apiKeyFile": "/var/folders/cy/bb8qp2_x2033hxb7v274ky7w0000gp/T/neo-EVEJiJ/router.key"
     }
   },
   "discovered": [

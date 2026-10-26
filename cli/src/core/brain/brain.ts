@@ -39,6 +39,11 @@ export interface AskRequest extends RunRequest {
   /** Provider session to continue, or null for a fresh one. */
   resume: string | null
   bypass: boolean
+  /**
+   * A side ask (Animations drawing): runs in a session / history of its own, never reads or replaces the conversation's, and its
+   * `session` in the reply is not for resuming.
+   */
+  side?: boolean
   /** Ask the user (a card, then "ตกลง" within 30 s). Missing → writes are denied. */
   confirm?(request: PermissionRequest): Promise<boolean>
 }

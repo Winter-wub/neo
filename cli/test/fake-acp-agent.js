@@ -5,6 +5,7 @@
 //   prompt contains "SLOW"  → waits for session/cancel
 //   prompt contains "TEXT"  → answers plain words (no JSON)
 //   FAKE_MODELS=models      → models come as `models.availableModels` instead of a `model` config option
+//   FAKE_AGENT_NAME=x       → agentInfo.name (default "fake"; claude-agent-acp announces a name with "claude" in it)
 //   FAKE_MODES=a,b          → offers these modes (session/set_mode)
 import { appendFileSync } from 'node:fs'
 
@@ -39,10 +40,10 @@ async function handle(m) {
   if (m.id !== undefined && !m.method && waiting[m.id]) { waiting[m.id](m.result); delete waiting[m.id]; return }
   if (m.method) log(m)
   const reply = result => out({ jsonrpc: '2.0', id: m.id, result })
-  if (m.method === 'initialize') return reply({ protocolVersion: 1, agentCapabilities: {}, agentInfo: { name: 'fake', title: 'Fake Agent' } })
+  if (m.method === 'initialize') return reply({ protocolVersion: 1, agentCapabilities: {}, agentInfo: { name: process.env.FAKE_AGENT_NAME || 'fake', title: 'Fake Agent' } })
   if (m.method === 'session/new') {
     const sid = 'S' + (Object.keys(sessions).length + 1)
-    sessions[sid] = { turns: 0, mcp: m.params.mcpServers.map(x => x.name) }
+    sessions[sid] = { turns: 0, sys: m.params._meta?.systemPrompt?.append || '', mcp: m.params.mcpServers.map(x => x.name) }
     const modes = process.env.FAKE_MODES ? { modes: { availableModes: process.env.FAKE_MODES.split(',').map(id => ({ id })), currentModeId: 'x' } } : {}
     return reply(process.env.FAKE_MODELS === 'models'
       ? { sessionId: sid, models: { availableModels: [{ modelId: 'haiku', name: 'Haiku' }, { modelId: 'sonnet', name: 'Sonnet' }], currentModelId: 'haiku' }, ...modes }
@@ -63,7 +64,7 @@ async function handle(m) {
     if (text.includes('PERM')) perm = await permission(sid, { toolCallId: 'e1', title: 'Edit README.md', kind: 'edit' })
     if (text.includes('READ')) perm = await permission(sid, { toolCallId: 'r1', title: 'Read README.md', kind: 'read' })
     if (text.includes('TEXT')) say(sid, 'ตอบเป็นข้อความธรรมดา')
-    else say(sid, JSON.stringify({ layout: 'text', title: 'turn ' + s.turns, lines: ['sid ' + sid, 'perm ' + perm, 'model ' + (s.model || '-'), 'mode ' + (s.mode || '-'), 'mcp ' + s.mcp.join(','), 'fresh ' + text.includes('คุณคือ')] }))
+    else say(sid, JSON.stringify({ layout: 'text', title: 'turn ' + s.turns, lines: ['sid ' + sid, 'perm ' + perm, 'model ' + (s.model || '-'), 'mode ' + (s.mode || '-'), 'mcp ' + s.mcp.join(','), 'fresh ' + (text.includes('คุณคือ') || s.sys.includes('คุณคือ'))] }))
     return reply({ stopReason: 'end_turn' })
   }
   if (m.id !== undefined) out({ jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'no' } })

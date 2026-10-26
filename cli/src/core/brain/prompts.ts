@@ -36,24 +36,38 @@ ego browser (neo-agents: browser_search, browser_read): ใช้เมื่อ
 skill ของ Claude Code: เลือก skill ที่ตรงกับคำขอเองได้แม้ผู้ใช้ไม่ได้เอ่ยชื่อเต็ม (เช่น "ego browser", "mappedin", "jenkins", "โลโก้ร้าน") — ถ้าตอบได้ด้วยเครื่องมืออ่านอย่างเดียวที่มี ให้ตอบเลย; ถ้าต้องรันคำสั่ง/ทำงานจริงตาม skill (คุณไม่มี Bash ในรอบนี้) ให้ตอบเพียง {"intent":"skill","skill":"ชื่อ skill","plan":"สิ่งที่จะทำ ภาษาไทยสั้น ≤90 ตัวอักษร","task":"คำสั่งงานเต็มสำหรับ Claude Code ที่มีเครื่องมือครบ"} ระบบจะถามผู้ใช้ยืนยันก่อน
 เรื่อง agent: ถามสถานะ/ผลงานของ agent ใน Orca ใช้ neo-agents (orca_agents, orca_agent_output, orca_runs, orca_run_tasks) ตอบเป็นการ์ดตามปกติ — สั่งงาน/ส่งข้อความหา agent ใน Orca ไม่ได้ (ดูอย่างเดียว)`
 
-/** First message of a session. */
-export function askPrompt(text: string, context: AskContext, kind: PromptKind, bypass: boolean) {
-  const { petName, wakeVariants, now } = context
-  const head = `คุณคือ "${petName}" สัตว์เลี้ยงบนจอมือถือ ซุกซน ร่าเริง ผู้ใช้พูดกับคุณว่า: "${text}"
-ข้อความนี้มาจากการถอดเสียงพูดภาษาไทยที่อาจผิดเพี้ยน ให้เดาเจตนาที่เป็นไปได้มากที่สุด (เช่น จีลา/จีร่า/จิร่า/ซีร่า = Jira, คอนฟลู = Confluence, คำที่ออกเสียงคล้าย ${wakeVariants.slice(0, WAKE_HINTS).join('/')} = ชื่อของคุณ)
+/** Everything about the persona after the first sentence: transcription hints, name rule, schedule and weather intents. */
+const personaRules = ({ petName, wakeVariants, now }: AskContext) => `ข้อความนี้มาจากการถอดเสียงพูดภาษาไทยที่อาจผิดเพี้ยน ให้เดาเจตนาที่เป็นไปได้มากที่สุด (เช่น จีลา/จีร่า/จิร่า/ซีร่า = Jira, คอนฟลู = Confluence, คำที่ออกเสียงคล้าย ${wakeVariants.slice(0, WAKE_HINTS).join('/')} = ชื่อของคุณ)
 ชื่อของคุณคือ "${petName}" เท่านั้น (ผู้ใช้ตั้งไว้ในการตั้งค่า) แนะนำตัว/เรียกตัวเองด้วยชื่อนี้เสมอ ถ้าความจำหรือบทสนทนาเก่าเรียกชื่ออื่น (เช่น Neo) ให้ถือว่าเป็นชื่อเก่าที่เลิกใช้แล้ว
 ถ้าผู้ใช้ขอให้เตือน/ปลุก/ทำงานบางอย่างในเวลาหนึ่ง (เช่น "พรุ่งนี้เช้าช่วยเช็คตั๋วเครื่องบินใน google", "ทุกวันศุกร์ 5 โมงเย็นสรุปงาน Jira", "อีกครึ่งชั่วโมงเตือนเอาผ้าเข้า") ให้ตอบเพียง {"intent":"schedule","kind":"alarm (แค่ร้องเตือน) หรือ task (ให้คุณไปทำงานนั้นตอนถึงเวลา)","title":"ข้อความเตือนสั้น ≤30 ตัวอักษร","prompt":"คำสั่งงานเต็มสำหรับ task","at":"YYYY-MM-DDTHH:mm (เวลาท้องถิ่น ครั้งเดียว)","cron":"m h dom mon dow (ถ้าทำซ้ำ ใส่แทน at)"} — ตอนนี้ ${localMinute(now)} (${WEEKDAYS[now.getDay()]}) ถ้าไม่บอกเวลาให้ถามกลับเป็นการ์ดปกติ ระบบจะถามผู้ใช้ยืนยันก่อนตั้งเอง
 ถ้าผู้ใช้น่าจะถามเรื่องสภาพอากาศ/ฝน/อุณหภูมิ ให้ตอบเพียง {"intent":"weather","place":"ชื่อสถานที่ที่ถาม (เว้นว่างถ้าไม่ระบุ)","day":0} (day: 0 วันนี้, 1 พรุ่งนี้, 2 มะรืน)`
+
+/** Memory, tools and card format: the part of the prompt that follows the persona. */
+function promptTail(context: AskContext, kind: PromptKind, bypass: boolean) {
   const tools = { claude: TOOLS_READ_ONLY, agent: toolsAgent(bypass), plain: TOOLS_PLAIN }[kind]
   const memory = context.memory.trim()
-  const notes = context.notes.join('\n')
   return [
-    notes ? 'บทสนทนาก่อนหน้า:\n' + notes + '\n' : '',
-    head,
     memory ? 'สิ่งที่คุณจำได้เกี่ยวกับผู้ใช้ (จากการทบทวนความจำตอนหลับ — ใช้ประกอบการตอบ ไม่ต้องพูดถึงเว้นแต่เกี่ยวข้อง):\n' + memory.slice(0, MEMORY_MAX) : '',
     tools,
     CARD_FORMAT,
   ].filter(Boolean).join('\n') + (kind === 'claude' ? CLAUDE_ONLY : '')
+}
+
+const earlierNotes = (notes: string[]) => (notes.length ? 'บทสนทนาก่อนหน้า:\n' + notes.join('\n') + '\n' : '')
+
+/** First message of a session. */
+export function askPrompt(text: string, context: AskContext, kind: PromptKind, bypass: boolean) {
+  const head = `คุณคือ "${context.petName}" สัตว์เลี้ยงบนจอมือถือ ซุกซน ร่าเริง ผู้ใช้พูดกับคุณว่า: "${text}"\n${personaRules(context)}`
+  return [earlierNotes(context.notes), head, promptTail(context, kind, bypass)].filter(Boolean).join('\n')
+}
+
+/**
+ * The same persona, memory, tools and card format as a system prompt (for agents that take one at `session/new`);
+ * the user's words then travel alone as the prompt. Rebuilt for every new conversation: memory, time and pet name change.
+ */
+export function systemPrompt(context: AskContext, kind: PromptKind, bypass: boolean) {
+  const head = `คุณคือ "${context.petName}" สัตว์เลี้ยงบนจอมือถือ ซุกซน ร่าเริง ข้อความของผู้ใช้ที่ตามมาทุกข้อคือสิ่งที่ผู้ใช้พูดกับคุณ\n${personaRules(context)}`
+  return [earlierNotes(context.notes), head, promptTail(context, kind, bypass)].filter(Boolean).join('\n')
 }
 
 /** Later message in a resumed session. */

@@ -53,8 +53,9 @@ class FaceView(ctx: Context, private val brain: Brain, private val debug: Boolea
         if (card?.pixel != null) { drawPixel(c, card, w, h, vmin, port, brain.cardAge(now)); overlays(c, now, w, h, vmin); return }
 
         // หน้า: ถ้ามีการ์ด หน้าอยู่ซ้าย 44% (แนวตั้ง: บนครึ่งจอ)
-        val aw = if (card != null && !port) w * 0.44f else w
-        val ah = if (card != null && port) h * 0.5f else h
+        val art = if (card == null && brain.thinking) brain.toolArt else null // ท่าเครื่องมือ: หน้าคิดอยู่ + ภาพวนในพื้นที่การ์ด
+        val aw = if ((card != null || art != null) && !port) w * 0.44f else w
+        val ah = if ((card != null || art != null) && port) h * 0.5f else h
         // แนวตั้ง: ตัดขอบว่างซ้าย-ขวา (คอลัมน์ 4..27 ยังมีแก้ม/หัวใจครบ) ให้หน้าใหญ่ขึ้น
         val cols = if (port) PORT_COLS else Face.W; val x0 = (Face.W - cols) / 2
         val s = max(1, min(aw / cols, ah / Face.H).toInt())
@@ -65,9 +66,10 @@ class FaceView(ctx: Context, private val brain: Brain, private val debug: Boolea
         faceBmp.setPixels(facePx, 0, Face.W, 0, 0, Face.W, Face.H)
         src.set(x0, 0, x0 + cols, Face.H)
         dst.set(fx, fy, fx + fw, fy + fh); c.drawBitmap(faceBmp, src, dst, pixel)
-        gridX = fx - x0 * s; gridY = fy; gridS = s; gridOn = card == null && !watch
+        gridX = fx - x0 * s; gridY = fy; gridS = s; gridOn = card == null && art == null && !watch
 
         if (card != null) drawCard(c, card, if (port) 0f else aw, if (port) ah else 0f, w, h, vmin, port, brain.cardAge(now))
+        if (art != null) drawToolArt(c, art, brain.toolFrame(now), if (port) 0f else aw, if (port) ah else 0f, w, h)
         if (watch) { // วันที่ใต้เวลา (แถว 11-12 ของหน้าปัด)
             text.typeface = bold; text.color = Clock.DIM; text.textAlign = Paint.Align.CENTER
             fitLine(c, Clock.date(java.util.Calendar.getInstance()), fx + fw / 2f, fy + 12.6f * s, fw * 0.9f, 1.7f * s)
@@ -151,6 +153,18 @@ class FaceView(ctx: Context, private val brain: Brain, private val debug: Boolea
         val x = ((w - aw) / 2).toInt(); val y = ((h - titleH - ah) / 2).toInt()
         dst.set(x, y, x + aw, y + ah); c.drawBitmap(bmp, null, dst, pixel)
         if (titleH > 0) { text.typeface = bold; text.textAlign = Paint.Align.CENTER; fitLine(c, card.title, w / 2, h - 2.5f * vmin, w * 0.9f, 4.5f * vmin) }
+    }
+
+    // ท่าเครื่องมือในพื้นที่ที่การ์ดจะอยู่ (ขวา/ล่างของหน้า) ขยายแบบจำนวนเต็ม; ป้ายอยู่ที่ซับด้านล่างจอ
+    private fun drawToolArt(c: Canvas, art: PixelArt, frame: Int, x0: Float, y0: Float, w: Float, h: Float) {
+        val bmp = artBmp?.takeIf { it.width == art.w && it.height == art.h } ?: Bitmap.createBitmap(art.w, art.h, Bitmap.Config.ARGB_8888).also { artBmp = it }
+        val f = art.frames[frame % art.frames.size]
+        bmp.setPixels(IntArray(f.size) { if (f[it] == 0) Face.BG else f[it] }, 0, art.w, 0, 0, art.w, art.h)
+        val rw = w - x0; val rh = (h - y0) * 0.86f // เผื่อที่ให้ซับ
+        val s = max(1, min(rw * 0.9f / art.w, rh * 0.9f / art.h).toInt())
+        val aw = art.w * s; val ah = art.h * s
+        val x = (x0 + (rw - aw) / 2).toInt(); val y = (y0 + (rh - ah) / 2).toInt()
+        dst.set(x, y, x + aw, y + ah); c.drawBitmap(bmp, null, dst, pixel)
     }
 
     /** วาดข้อความบรรทัดเดียว (ตาม textAlign ปัจจุบัน) ย่อขนาดถ้ายาวเกินกว้าง */

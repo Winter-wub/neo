@@ -1,4 +1,5 @@
 import { SETTING_NAMES, type SettingName } from '../../protocol'
+import { ANIMATION_USAGE, parseAnimationArgv, type AnimationCommand } from './animation-argv'
 import { BRAIN_SWITCHES, BRAIN_USAGE, BRAIN_VALUE_FLAGS, parseBrainArgv, type BrainCommand } from './brain-argv'
 import { parseDreamArgv, DREAM_USAGE, type DreamCommand } from './dream-argv'
 import { PET_SWITCHES, PET_USAGE, PET_VALUE_FLAGS, parsePetArgv, type PetCommand } from './pet-argv'
@@ -36,6 +37,7 @@ export type Command =
   | DreamCommand
   | BrainCommand
   | PetCommand
+  | AnimationCommand
   | { name: 'help' }
 
 export const DEFAULT_PORT = 8000
@@ -67,6 +69,7 @@ ${DREAM_USAGE}
 ${JOBS_USAGE}
 ${BRAIN_USAGE}
 ${PET_USAGE}
+${ANIMATION_USAGE}
   neo daemon run [--port <n>]      รัน Neo daemon (ค่าเริ่มต้น port ${DEFAULT_PORT})
   neo daemon install [--port <n>]  ติดตั้ง LaunchAgent + symlink ~/.local/bin/neo แล้วเริ่ม
   neo daemon start|stop|restart    สั่ง daemon ผ่าน launchd
@@ -228,6 +231,8 @@ export function parseArgs(argv: readonly string[]): { globals: Globals; command:
     case 'name':
     case 'face':
       return { globals, command: parsePetArgv(noun, words, flags, { only, noExtra, fail: message => { throw new UsageError(message) } })! }
+    case 'animation':
+      return { globals, command: parseAnimationArgv(noun, words, { only, noExtra, fail: message => { throw new UsageError(message) } })! }
     case 'provider':
     case 'model': {
       const fail = (message: string): never => {

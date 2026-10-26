@@ -44,7 +44,9 @@ test('neo doctor --json: every check in order, with where claude was found; gold
   expect(rows[0]).toMatchObject({ ok: true, found: { claude: join(FAKE_BIN, 'claude') } })
   expect(rows.find(r => r.id === 'fda')).toMatchObject({ ok: true })
   expect(rows.find(r => r.id === 'phone')).toMatchObject({ ok: false, fix: 'neo devices pair' })
-  const portable = rows.map(r => ({ ...r, found: r.found && Object.fromEntries(Object.entries(r.found).map(([k, v]) => [k, v && v.replace(FAKE_BIN, '/usr/local/bin')])) }))
+  // the fake bin reads as /usr/local/bin in the fixture
+  const local = (v: string) => v.replaceAll(FAKE_BIN, '/usr/local/bin')
+  const portable = rows.map(r => ({ ...r, detail: r.detail && local(r.detail), found: r.found && Object.fromEntries(Object.entries(r.found).map(([k, v]) => [k, v && local(v)])) }))
   await golden('doctor', portable)
 })
 

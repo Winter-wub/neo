@@ -10,6 +10,7 @@ import { brainRoute } from './brain-routes'
 import { jobsRoute } from './jobs-routes'
 import { dreamRoute } from './dream-routes'
 import { memoryRoute, memoryStatus } from './memory-routes'
+import { animationRoute } from './animation-routes'
 import { petRoute } from './pet-routes'
 import { speechRoute } from './speech-routes'
 import {
@@ -133,6 +134,8 @@ export async function startCommandServer({ core, clock, home, build = 'dev', pin
             if (brain !== undefined) return json(brain)
             const petty = await petRoute(core, route, () => readBody(req))
             if (petty !== undefined) return json(petty)
+            const drawn = await animationRoute(core, route, () => readBody(req))
+            if (drawn !== undefined) return json(drawn)
             const dreamt = await dreamRoute(core, route, () => readBody(req))
             if (dreamt !== undefined) return json(dreamt)
             const handled = await memoryRoute(core.memory, route, () => readBody(req))

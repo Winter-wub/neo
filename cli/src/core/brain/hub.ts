@@ -22,6 +22,7 @@ type Entry = ProviderConfig & { found?: true }
 const DEFAULT_NAME = 'claude'
 const CLAUDE: ProviderConfig = { type: 'claude-code', label: 'Claude Code' }
 const PET = 'นีโอ'
+const TITLE_MAX = 16
 
 export interface HubOptions {
   /** NEO_HOME */
@@ -210,9 +211,13 @@ export async function createBrainHub(options: HubOptions) {
   }
   const modelCard = (name: string, value: string | null): Card => {
     const id = resolveModel(name, value)
+    const shown = value || 'ค่าเริ่มต้น'
+    // a card title holds 16 characters: "โมเดล x" when it fits, else the bare name (after any provider/ prefix), else a generic title; the full id stays in the lines
+    const short = shown.split('/').pop()!
+    const title = `โมเดล ${shown}`.length <= TITLE_MAX ? `โมเดล ${shown}` : short.length <= TITLE_MAX ? short : 'เปลี่ยนโมเดล'
     return textCard({
-      icon: 'task', title: `โมเดล ${value || 'ค่าเริ่มต้น'}`,
-      lines: [labelOf(name), ...(id && id !== value ? [id] : [])],
+      icon: 'task', title,
+      lines: [labelOf(name), ...(title === `โมเดล ${shown}` ? [] : [shown]), ...(id && id !== value ? [id] : [])],
       emotion: 'proud', sounds: ['happy'], seconds: 8,
     })
   }

@@ -25,7 +25,7 @@ const freePort = () =>
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Everything the old backend still does differently from the amended contract (spec §4.1). */
-const divergences = new Set<Divergence>(['localhost-needs-token', 'phone-port-only-neoapp-routes', 'ping-token-escaped', 'stt-failure-is-stterr'])
+const divergences = new Set<Divergence>(['localhost-needs-token', 'phone-port-only-neoapp-routes', 'ping-token-escaped', 'stt-failure-is-stterr', 'phone-settings-api'])
 
 export const oldBackend: Driver = {
   name: 'old-node-backend',

@@ -70,6 +70,8 @@ export type Divergence =
    * throws (non-integer execFile timeout) and kills the whole process instead of emitting `stterr`.
    */
   | 'stt-failure-is-stterr'
+  /** Ticket 24 (decided 2026-10-26): a paired phone reads and changes Neo's settings, brains, jobs, memory, devices over port 8000. The old backend has none of these routes. */
+  | 'phone-settings-api'
 
 export interface Driver {
   readonly name: string

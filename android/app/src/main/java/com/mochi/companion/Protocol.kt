@@ -10,8 +10,8 @@ data class IdleSettings(
 ) {
     companion object {
         fun fromJson(o: JSONObject) = IdleSettings(
-            sleepAfter = if (o.has("sleepAfter")) o.optLong("sleepAfter") else null,
-            clock = if (o.has("clock")) o.optBoolean("clock") else null,
+            sleepAfter = if (o.isNull("sleepAfter")) null else o.optLong("sleepAfter"),
+            clock = if (o.isNull("clock")) null else o.optBoolean("clock"),
         )
     }
 }
@@ -22,7 +22,13 @@ data class FaceTheme(
     val cheek: String = "",
     val bg: String = "",
 ) {
-    fun toJson(): String = JSONObject().put("fg", fg).put("accent", accent).put("cheek", cheek).put("bg", bg).toString()
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("fg", fg)
+        j.put("accent", accent)
+        j.put("cheek", cheek)
+        j.put("bg", bg)
+    }
+    fun toJson(): String = toJsonObject().toString()
 
     companion object {
         fun fromJson(o: JSONObject) = FaceTheme(
@@ -89,7 +95,11 @@ data class PairRequest(
     val code: String = "",
     val name: String = "",
 ) {
-    fun toJson(): String = JSONObject().put("code", code).put("name", name).toString()
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("code", code)
+        j.put("name", name)
+    }
+    fun toJson(): String = toJsonObject().toString()
 
     companion object {
         fun fromJson(o: JSONObject) = PairRequest(
@@ -108,7 +118,7 @@ data class PairResponse(
         fun fromJson(o: JSONObject) = PairResponse(
             token = o.optString("token"),
             name = o.optString("name", "Neo"),
-            error = if (o.has("error")) o.optString("error") else null,
+            error = if (o.isNull("error")) null else o.optString("error"),
         )
         fun parse(s: String): PairResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
     }
@@ -118,7 +128,11 @@ data class PetRequest(
     val hunger: Float = 0f,
     val affection: Float = 0f,
 ) {
-    fun toJson(): String = JSONObject().put("hunger", hunger.toDouble()).put("affection", affection.toDouble()).toString()
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("hunger", hunger.toDouble())
+        j.put("affection", affection.toDouble())
+    }
+    fun toJson(): String = toJsonObject().toString()
 
     companion object {
         fun fromJson(o: JSONObject) = PetRequest(
@@ -131,11 +145,1129 @@ data class PetRequest(
 data class AskRequest(
     val text: String = "",
 ) {
-    fun toJson(): String = JSONObject().put("text", text).toString()
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("text", text)
+    }
+    fun toJson(): String = toJsonObject().toString()
 
     companion object {
         fun fromJson(o: JSONObject) = AskRequest(
             text = o.optString("text"),
+        )
+    }
+}
+
+data class NeoPet(
+    val hunger: Float = 0f,
+    val affection: Float = 0f,
+    val at: Long = 0L,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoPet(
+            hunger = o.optDouble("hunger", 0.0).toFloat(),
+            affection = o.optDouble("affection", 0.0).toFloat(),
+            at = o.optLong("at"),
+        )
+    }
+}
+
+data class NeoStatus(
+    val phone: Boolean = false,
+    val consoles: Int = 0,
+    val provider: String = "",
+    val model: String? = null,
+    val thinking: Boolean = false,
+    val ringing: Boolean = false,
+    val busy: Boolean = false,
+    val requireName: Boolean = false,
+    val bypass: Boolean = false,
+    val pet: NeoPet? = null,
+    val uptime: Long = 0L,
+    val pid: Int = 0,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoStatus(
+            phone = o.optBoolean("phone"),
+            consoles = o.optInt("consoles"),
+            provider = o.optString("provider"),
+            model = if (o.isNull("model")) null else o.optString("model"),
+            thinking = o.optBoolean("thinking"),
+            ringing = o.optBoolean("ringing"),
+            busy = o.optBoolean("busy"),
+            requireName = o.optBoolean("requireName"),
+            bypass = o.optBoolean("bypass"),
+            pet = if (o.isNull("pet")) null else o.optJSONObject("pet")?.let { NeoPet.fromJson(it) },
+            uptime = o.optLong("uptime"),
+            pid = o.optInt("pid"),
+        )
+        fun parse(s: String): NeoStatus = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoHome(
+    val city: String = "",
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("city", city)
+        j.put("lat", lat)
+        j.put("lon", lon)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = NeoHome(
+            city = o.optString("city"),
+            lat = o.optDouble("lat", 0.0),
+            lon = o.optDouble("lon", 0.0),
+        )
+    }
+}
+
+data class NeoSettings(
+    val requireName: Boolean = false,
+    val followUp: Boolean = false,
+    val bypass: Boolean = false,
+    val tailscale: Boolean = false,
+    val lan: Boolean = false,
+    val idle: IdleSettings? = null,
+    val dream: Boolean = false,
+    val onboarded: Boolean = false,
+    val claudeConfigDir: String? = null,
+    val home: NeoHome? = null,
+    val mcpServers: List<String>? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoSettings(
+            requireName = o.optBoolean("requireName"),
+            followUp = o.optBoolean("followUp"),
+            bypass = o.optBoolean("bypass"),
+            tailscale = o.optBoolean("tailscale"),
+            lan = o.optBoolean("lan"),
+            idle = o.optJSONObject("idle")?.let { IdleSettings.fromJson(it) },
+            dream = o.optBoolean("dream"),
+            onboarded = o.optBoolean("onboarded"),
+            claudeConfigDir = if (o.isNull("claudeConfigDir")) null else o.optString("claudeConfigDir"),
+            home = o.optJSONObject("home")?.let { NeoHome.fromJson(it) },
+            mcpServers = if (o.isNull("mcpServers")) null else o.optJSONArray("mcpServers")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): NeoSettings = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class SettingSetRequest(
+    val name: String = "",
+    val args: List<String> = emptyList(),
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("name", name)
+        j.put("args", org.json.JSONArray(args))
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = SettingSetRequest(
+            name = o.optString("name"),
+            args = o.optJSONArray("args")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+        )
+    }
+}
+
+data class NeoDevice(
+    val id: String = "",
+    val name: String = "",
+    val paired: String = "",
+    val lastSeen: String? = null,
+    val self: Boolean = false,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoDevice(
+            id = o.optString("id"),
+            name = o.optString("name"),
+            paired = o.optString("paired"),
+            lastSeen = if (o.isNull("lastSeen")) null else o.optString("lastSeen"),
+            self = o.optBoolean("self"),
+        )
+        fun parseList(s: String): List<NeoDevice> = try { org.json.JSONArray(s).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { fromJson(it) } } } catch (_: Exception) { emptyList() }
+    }
+}
+
+data class DeviceRevokeRequest(
+    val id: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("id", id)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = DeviceRevokeRequest(
+            id = o.optString("id"),
+        )
+    }
+}
+
+data class NeoProvider(
+    val name: String = "",
+    val label: String = "",
+    val type: String = "",
+    val found: Boolean = false,
+    val model: String? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoProvider(
+            name = o.optString("name"),
+            label = o.optString("label"),
+            type = o.optString("type"),
+            found = o.optBoolean("found"),
+            model = if (o.isNull("model")) null else o.optString("model"),
+        )
+    }
+}
+
+data class NeoProviderList(
+    val current: String = "",
+    val list: List<NeoProvider> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoProviderList(
+            current = o.optString("current"),
+            list = o.optJSONArray("list")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoProvider.fromJson(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): NeoProviderList = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class ProviderUseRequest(
+    val name: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("name", name)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = ProviderUseRequest(
+            name = o.optString("name"),
+        )
+    }
+}
+
+data class ProviderUseResponse(
+    val current: String = "",
+    val card: Card? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = ProviderUseResponse(
+            current = o.optString("current"),
+            card = o.optJSONObject("card")?.let { try { Card.fromJson(it) } catch (_: Exception) { null } },
+        )
+        fun parse(s: String): ProviderUseResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoDiscoveredAgent(
+    val name: String = "",
+    val label: String = "",
+    val type: String = "",
+    val available: Boolean = false,
+    val via: String = "",
+    val registry: String = "",
+    val why: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoDiscoveredAgent(
+            name = o.optString("name"),
+            label = o.optString("label"),
+            type = o.optString("type"),
+            available = o.optBoolean("available"),
+            via = o.optString("via"),
+            registry = o.optString("registry"),
+            why = o.optString("why"),
+        )
+        fun parseList(s: String): List<NeoDiscoveredAgent> = try { org.json.JSONArray(s).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { fromJson(it) } } } catch (_: Exception) { emptyList() }
+    }
+}
+
+data class NeoProviderConfig(
+    val type: String? = null,
+    val label: String? = null,
+    val command: String? = null,
+    val args: List<String>? = null,
+    val baseUrl: String? = null,
+    val url: String? = null,
+    val model: String? = null,
+    val models: Map<String, String>? = null,
+    val aliases: List<String>? = null,
+    val config: Map<String, String>? = null,
+    val apiKeyEnv: String? = null,
+    val apiKeyFile: String? = null,
+    val headers: Map<String, String>? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        type?.let { j.put("type", it) }
+        label?.let { j.put("label", it) }
+        command?.let { j.put("command", it) }
+        args?.let { j.put("args", org.json.JSONArray(it)) }
+        baseUrl?.let { j.put("baseUrl", it) }
+        url?.let { j.put("url", it) }
+        model?.let { j.put("model", it) }
+        models?.let { j.put("models", org.json.JSONObject(it)) }
+        aliases?.let { j.put("aliases", org.json.JSONArray(it)) }
+        config?.let { j.put("config", org.json.JSONObject(it)) }
+        apiKeyEnv?.let { j.put("apiKeyEnv", it) }
+        apiKeyFile?.let { j.put("apiKeyFile", it) }
+        headers?.let { j.put("headers", org.json.JSONObject(it)) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = NeoProviderConfig(
+            type = if (o.isNull("type")) null else o.optString("type"),
+            label = if (o.isNull("label")) null else o.optString("label"),
+            command = if (o.isNull("command")) null else o.optString("command"),
+            args = if (o.isNull("args")) null else o.optJSONArray("args")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            baseUrl = if (o.isNull("baseUrl")) null else o.optString("baseUrl"),
+            url = if (o.isNull("url")) null else o.optString("url"),
+            model = if (o.isNull("model")) null else o.optString("model"),
+            models = if (o.isNull("models")) null else o.optJSONObject("models")?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap(),
+            aliases = if (o.isNull("aliases")) null else o.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            config = if (o.isNull("config")) null else o.optJSONObject("config")?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap(),
+            apiKeyEnv = if (o.isNull("apiKeyEnv")) null else o.optString("apiKeyEnv"),
+            apiKeyFile = if (o.isNull("apiKeyFile")) null else o.optString("apiKeyFile"),
+            headers = if (o.isNull("headers")) null else o.optJSONObject("headers")?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap(),
+        )
+    }
+}
+
+data class NeoProviderConfigEntry(
+    val type: String? = null,
+    val label: String? = null,
+    val command: String? = null,
+    val args: List<String>? = null,
+    val baseUrl: String? = null,
+    val url: String? = null,
+    val model: String? = null,
+    val models: Map<String, String>? = null,
+    val aliases: List<String>? = null,
+    val config: Map<String, String>? = null,
+    val apiKeyEnv: String? = null,
+    val apiKeyFile: String? = null,
+    val headers: Map<String, String>? = null,
+    val found: Boolean? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoProviderConfigEntry(
+            type = if (o.isNull("type")) null else o.optString("type"),
+            label = if (o.isNull("label")) null else o.optString("label"),
+            command = if (o.isNull("command")) null else o.optString("command"),
+            args = if (o.isNull("args")) null else o.optJSONArray("args")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            baseUrl = if (o.isNull("baseUrl")) null else o.optString("baseUrl"),
+            url = if (o.isNull("url")) null else o.optString("url"),
+            model = if (o.isNull("model")) null else o.optString("model"),
+            models = if (o.isNull("models")) null else o.optJSONObject("models")?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap(),
+            aliases = if (o.isNull("aliases")) null else o.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            config = if (o.isNull("config")) null else o.optJSONObject("config")?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap(),
+            apiKeyEnv = if (o.isNull("apiKeyEnv")) null else o.optString("apiKeyEnv"),
+            apiKeyFile = if (o.isNull("apiKeyFile")) null else o.optString("apiKeyFile"),
+            headers = if (o.isNull("headers")) null else o.optJSONObject("headers")?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap(),
+            found = if (o.isNull("found")) null else o.optBoolean("found"),
+        )
+    }
+}
+
+data class NeoProviderConfigView(
+    val default: String = "",
+    val providers: Map<String, NeoProviderConfigEntry> = emptyMap(),
+    val overrides: Map<String, NeoProviderConfig> = emptyMap(),
+    val discovered: List<NeoDiscoveredAgent> = emptyList(),
+    val keys: Map<String, Boolean> = emptyMap(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoProviderConfigView(
+            default = o.optString("default"),
+            providers = o.optJSONObject("providers")?.let { m -> m.keys().asSequence().mapNotNull { k -> m.optJSONObject(k)?.let { k to NeoProviderConfigEntry.fromJson(it) } }.toMap() } ?: emptyMap(),
+            overrides = o.optJSONObject("overrides")?.let { m -> m.keys().asSequence().mapNotNull { k -> m.optJSONObject(k)?.let { k to NeoProviderConfig.fromJson(it) } }.toMap() } ?: emptyMap(),
+            discovered = o.optJSONArray("discovered")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoDiscoveredAgent.fromJson(it) } } ?: emptyList(),
+            keys = o.optJSONObject("keys")?.let { m -> m.keys().asSequence().associateWith { m.optBoolean(it) } } ?: emptyMap(),
+        )
+        fun parse(s: String): NeoProviderConfigView = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class ProviderConfigSave(
+    val name: String = "",
+    val cfg: NeoProviderConfig? = null,
+    val apiKey: String? = null,
+    val remove: Boolean? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("name", name)
+        cfg?.let { j.put("cfg", it.toJsonObject()) }
+        apiKey?.let { j.put("apiKey", it) }
+        remove?.let { j.put("remove", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = ProviderConfigSave(
+            name = o.optString("name"),
+            cfg = if (o.isNull("cfg")) null else o.optJSONObject("cfg")?.let { NeoProviderConfig.fromJson(it) },
+            apiKey = if (o.isNull("apiKey")) null else o.optString("apiKey"),
+            remove = if (o.isNull("remove")) null else o.optBoolean("remove"),
+        )
+    }
+}
+
+data class ModelsListRequest(
+    val name: String? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        name?.let { j.put("name", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = ModelsListRequest(
+            name = if (o.isNull("name")) null else o.optString("name"),
+        )
+    }
+}
+
+data class ModelUseRequest(
+    val name: String? = null,
+    val model: String? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        name?.let { j.put("name", it) }
+        model?.let { j.put("model", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = ModelUseRequest(
+            name = if (o.isNull("name")) null else o.optString("name"),
+            model = if (o.isNull("model")) null else o.optString("model"),
+        )
+    }
+}
+
+data class NeoModelEntry(
+    val id: String = "",
+    val name: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoModelEntry(
+            id = o.optString("id"),
+            name = o.optString("name"),
+        )
+    }
+}
+
+data class NeoModelAlias(
+    val alias: String = "",
+    val id: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoModelAlias(
+            alias = o.optString("alias"),
+            id = o.optString("id"),
+        )
+    }
+}
+
+data class NeoModelList(
+    val name: String = "",
+    val mapped: List<NeoModelAlias> = emptyList(),
+    val list: List<NeoModelEntry> = emptyList(),
+    val current: String? = null,
+    val error: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoModelList(
+            name = o.optString("name"),
+            mapped = o.optJSONArray("mapped")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoModelAlias.fromJson(it) } } ?: emptyList(),
+            list = o.optJSONArray("list")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoModelEntry.fromJson(it) } } ?: emptyList(),
+            current = if (o.isNull("current")) null else o.optString("current"),
+            error = o.optString("error"),
+        )
+        fun parse(s: String): NeoModelList = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class CardResponse(
+    val card: Card? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = CardResponse(
+            card = o.optJSONObject("card")?.let { try { Card.fromJson(it) } catch (_: Exception) { null } },
+        )
+        fun parse(s: String): CardResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoWakeTraining(
+    val name: String = "",
+    val got: List<String> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoWakeTraining(
+            name = o.optString("name"),
+            got = o.optJSONArray("got")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+        )
+    }
+}
+
+data class NeoWakeInfo(
+    val name: String = "",
+    val variants: List<String> = emptyList(),
+    val training: NeoWakeTraining? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoWakeInfo(
+            name = o.optString("name"),
+            variants = o.optJSONArray("variants")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            training = if (o.isNull("training")) null else o.optJSONObject("training")?.let { NeoWakeTraining.fromJson(it) },
+        )
+        fun parse(s: String): NeoWakeInfo = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NameSetRequest(
+    val name: String = "",
+    val variants: List<String>? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("name", name)
+        variants?.let { j.put("variants", org.json.JSONArray(it)) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = NameSetRequest(
+            name = o.optString("name"),
+            variants = if (o.isNull("variants")) null else o.optJSONArray("variants")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+        )
+    }
+}
+
+data class NameRequest(
+    val name: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("name", name)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = NameRequest(
+            name = o.optString("name"),
+        )
+    }
+}
+
+data class NeoJob(
+    val id: String = "",
+    val kind: String = "",
+    val title: String = "",
+    val enabled: Boolean = false,
+    val prompt: String? = null,
+    val at: Long? = null,
+    val cron: String? = null,
+    val last: Long? = null,
+    val next: Long? = null,
+    val `when`: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoJob(
+            id = o.optString("id"),
+            kind = o.optString("kind"),
+            title = o.optString("title"),
+            enabled = o.optBoolean("enabled"),
+            prompt = if (o.isNull("prompt")) null else o.optString("prompt"),
+            at = if (o.isNull("at")) null else o.optLong("at"),
+            cron = if (o.isNull("cron")) null else o.optString("cron"),
+            last = if (o.isNull("last")) null else o.optLong("last"),
+            next = if (o.isNull("next")) null else o.optLong("next"),
+            `when` = o.optString("when"),
+        )
+        fun parse(s: String): NeoJob = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoJobDraft(
+    val kind: String = "",
+    val title: String = "",
+    val prompt: String? = null,
+    val at: Long? = null,
+    val cron: String? = null,
+    val `when`: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoJobDraft(
+            kind = o.optString("kind"),
+            title = o.optString("title"),
+            prompt = if (o.isNull("prompt")) null else o.optString("prompt"),
+            at = if (o.isNull("at")) null else o.optLong("at"),
+            cron = if (o.isNull("cron")) null else o.optString("cron"),
+            `when` = o.optString("when"),
+        )
+    }
+}
+
+data class NeoJobProblem(
+    val line: Int = 0,
+    val text: String = "",
+    val error: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoJobProblem(
+            line = o.optInt("line"),
+            text = o.optString("text"),
+            error = o.optString("error"),
+        )
+    }
+}
+
+data class NeoRingingJob(
+    val id: String = "",
+    val title: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoRingingJob(
+            id = o.optString("id"),
+            title = o.optString("title"),
+        )
+    }
+}
+
+data class NeoJobList(
+    val jobs: List<NeoJob> = emptyList(),
+    val ringing: NeoRingingJob? = null,
+    val problems: List<NeoJobProblem> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoJobList(
+            jobs = o.optJSONArray("jobs")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoJob.fromJson(it) } } ?: emptyList(),
+            ringing = if (o.isNull("ringing")) null else o.optJSONObject("ringing")?.let { NeoRingingJob.fromJson(it) },
+            problems = o.optJSONArray("problems")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoJobProblem.fromJson(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): NeoJobList = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class JobParseRequest(
+    val speech: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("speech", speech)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = JobParseRequest(
+            speech = o.optString("speech"),
+        )
+    }
+}
+
+data class JobParseResponse(
+    val draft: NeoJobDraft? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = JobParseResponse(
+            draft = o.optJSONObject("draft")?.let { NeoJobDraft.fromJson(it) },
+        )
+        fun parse(s: String): JobParseResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class JobAddRequest(
+    val kind: String = "",
+    val title: String? = null,
+    val prompt: String? = null,
+    val at: Long? = null,
+    val cron: String? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("kind", kind)
+        title?.let { j.put("title", it) }
+        prompt?.let { j.put("prompt", it) }
+        at?.let { j.put("at", it) }
+        cron?.let { j.put("cron", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = JobAddRequest(
+            kind = o.optString("kind"),
+            title = if (o.isNull("title")) null else o.optString("title"),
+            prompt = if (o.isNull("prompt")) null else o.optString("prompt"),
+            at = if (o.isNull("at")) null else o.optLong("at"),
+            cron = if (o.isNull("cron")) null else o.optString("cron"),
+        )
+    }
+}
+
+data class JobEditRequest(
+    val ref: String = "",
+    val title: String? = null,
+    val prompt: String? = null,
+    val at: Long? = null,
+    val cron: String? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("ref", ref)
+        title?.let { j.put("title", it) }
+        prompt?.let { j.put("prompt", it) }
+        at?.let { j.put("at", it) }
+        cron?.let { j.put("cron", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = JobEditRequest(
+            ref = o.optString("ref"),
+            title = if (o.isNull("title")) null else o.optString("title"),
+            prompt = if (o.isNull("prompt")) null else o.optString("prompt"),
+            at = if (o.isNull("at")) null else o.optLong("at"),
+            cron = if (o.isNull("cron")) null else o.optString("cron"),
+        )
+    }
+}
+
+data class JobEnableRequest(
+    val ref: String = "",
+    val enabled: Boolean = false,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("ref", ref)
+        j.put("enabled", enabled)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = JobEnableRequest(
+            ref = o.optString("ref"),
+            enabled = o.optBoolean("enabled"),
+        )
+    }
+}
+
+data class JobRefRequest(
+    val ref: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("ref", ref)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = JobRefRequest(
+            ref = o.optString("ref"),
+        )
+    }
+}
+
+data class JobRemoveResponse(
+    val removed: NeoJob? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = JobRemoveResponse(
+            removed = o.optJSONObject("removed")?.let { NeoJob.fromJson(it) },
+        )
+        fun parse(s: String): JobRemoveResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoMemoryItem(
+    val section: String = "",
+    val text: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoMemoryItem(
+            section = o.optString("section"),
+            text = o.optString("text"),
+        )
+    }
+}
+
+data class NeoMemoryDoc(
+    val text: String = "",
+    val version: String = "",
+    val items: List<NeoMemoryItem> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoMemoryDoc(
+            text = o.optString("text"),
+            version = o.optString("version"),
+            items = o.optJSONArray("items")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoMemoryItem.fromJson(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): NeoMemoryDoc = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class MemorySaveRequest(
+    val text: String = "",
+    val since: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("text", text)
+        j.put("since", since)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = MemorySaveRequest(
+            text = o.optString("text"),
+            since = o.optString("since"),
+        )
+    }
+}
+
+data class MemoryAddRequest(
+    val text: String = "",
+    val section: String? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("text", text)
+        section?.let { j.put("section", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = MemoryAddRequest(
+            text = o.optString("text"),
+            section = if (o.isNull("section")) null else o.optString("section"),
+        )
+    }
+}
+
+data class ForgetRequest(
+    val text: String = "",
+    val all: Boolean? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("text", text)
+        all?.let { j.put("all", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = ForgetRequest(
+            text = o.optString("text"),
+            all = if (o.isNull("all")) null else o.optBoolean("all"),
+        )
+    }
+}
+
+data class MemoryForgetResponse(
+    val removed: List<NeoMemoryItem> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = MemoryForgetResponse(
+            removed = o.optJSONArray("removed")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoMemoryItem.fromJson(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): MemoryForgetResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoJournalDay(
+    val day: String = "",
+    val entries: Int = 0,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoJournalDay(
+            day = o.optString("day"),
+            entries = o.optInt("entries"),
+        )
+        fun parseList(s: String): List<NeoJournalDay> = try { org.json.JSONArray(s).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { fromJson(it) } } } catch (_: Exception) { emptyList() }
+    }
+}
+
+data class NeoJournalEntry(
+    val day: String = "",
+    val time: String = "",
+    val q: String = "",
+    val a: String = "",
+    val ok: Boolean = false,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoJournalEntry(
+            day = o.optString("day"),
+            time = o.optString("time"),
+            q = o.optString("q"),
+            a = o.optString("a"),
+            ok = o.optBoolean("ok"),
+        )
+    }
+}
+
+data class NeoJournalDoc(
+    val day: String = "",
+    val text: String = "",
+    val version: String = "",
+    val entries: List<NeoJournalEntry> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoJournalDoc(
+            day = o.optString("day"),
+            text = o.optString("text"),
+            version = o.optString("version"),
+            entries = o.optJSONArray("entries")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoJournalEntry.fromJson(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): NeoJournalDoc = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class JournalShowRequest(
+    val day: String? = null,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        day?.let { j.put("day", it) }
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = JournalShowRequest(
+            day = if (o.isNull("day")) null else o.optString("day"),
+        )
+    }
+}
+
+data class JournalForgetResponse(
+    val removed: List<NeoJournalEntry> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = JournalForgetResponse(
+            removed = o.optJSONArray("removed")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoJournalEntry.fromJson(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): JournalForgetResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoDreamInfo(
+    val id: String = "",
+    val at: Long = 0L,
+    val reason: String = "",
+    val took: Long = 0L,
+    val entries: Int = 0,
+    val dream: String = "",
+    val insights: Int = 0,
+    val undelivered: Boolean = false,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoDreamInfo(
+            id = o.optString("id"),
+            at = o.optLong("at"),
+            reason = o.optString("reason"),
+            took = o.optLong("took"),
+            entries = o.optInt("entries"),
+            dream = o.optString("dream"),
+            insights = o.optInt("insights"),
+            undelivered = o.optBoolean("undelivered"),
+        )
+        fun parseList(s: String): List<NeoDreamInfo> = try { org.json.JSONArray(s).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { fromJson(it) } } } catch (_: Exception) { emptyList() }
+    }
+}
+
+data class NeoDreamInsight(
+    val q: String = "",
+    val finding: String = "",
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoDreamInsight(
+            q = o.optString("q"),
+            finding = o.optString("finding"),
+        )
+    }
+}
+
+data class NeoDreamCard(
+    val title: String = "",
+    val lines: List<String> = emptyList(),
+    val items: List<CardItem> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoDreamCard(
+            title = o.optString("title"),
+            lines = o.optJSONArray("lines")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            items = o.optJSONArray("items")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { CardItem.fromJson(it) } } ?: emptyList(),
+        )
+    }
+}
+
+data class NeoDreamDoc(
+    val id: String = "",
+    val text: String = "",
+    val version: String = "",
+    val at: Long = 0L,
+    val reason: String = "",
+    val took: Long = 0L,
+    val entries: Int = 0,
+    val dream: String = "",
+    val insights: List<NeoDreamInsight> = emptyList(),
+    val patterns: List<String> = emptyList(),
+    val added: List<String> = emptyList(),
+    val removed: List<String> = emptyList(),
+    val card: NeoDreamCard? = null,
+    val undelivered: Boolean = false,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoDreamDoc(
+            id = o.optString("id"),
+            text = o.optString("text"),
+            version = o.optString("version"),
+            at = o.optLong("at"),
+            reason = o.optString("reason"),
+            took = o.optLong("took"),
+            entries = o.optInt("entries"),
+            dream = o.optString("dream"),
+            insights = o.optJSONArray("insights")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoDreamInsight.fromJson(it) } } ?: emptyList(),
+            patterns = o.optJSONArray("patterns")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            added = o.optJSONArray("added")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            removed = o.optJSONArray("removed")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            card = o.optJSONObject("card")?.let { NeoDreamCard.fromJson(it) },
+            undelivered = o.optBoolean("undelivered"),
+        )
+        fun parse(s: String): NeoDreamDoc = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoDreamStatus(
+    val enabled: Boolean = false,
+    val running: Boolean = false,
+    val last: NeoDreamInfo? = null,
+    val why: String? = null,
+    val blocked: String? = null,
+    val newEntries: Int = 0,
+    val idleMinutes: Double = 0.0,
+    val quietNow: Boolean = false,
+    val quietHours: List<Int> = emptyList(),
+    val activity: List<Double> = emptyList(),
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoDreamStatus(
+            enabled = o.optBoolean("enabled"),
+            running = o.optBoolean("running"),
+            last = if (o.isNull("last")) null else o.optJSONObject("last")?.let { NeoDreamInfo.fromJson(it) },
+            why = if (o.isNull("why")) null else o.optString("why"),
+            blocked = if (o.isNull("blocked")) null else o.optString("blocked"),
+            newEntries = o.optInt("newEntries"),
+            idleMinutes = o.optDouble("idleMinutes", 0.0),
+            quietNow = o.optBoolean("quietNow"),
+            quietHours = o.optJSONArray("quietHours")?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList(),
+            activity = o.optJSONArray("activity")?.let { a -> (0 until a.length()).map { a.optDouble(it) } } ?: emptyList(),
+        )
+        fun parse(s: String): NeoDreamStatus = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class DreamEnableRequest(
+    val enabled: Boolean = false,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("enabled", enabled)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = DreamEnableRequest(
+            enabled = o.optBoolean("enabled"),
+        )
+    }
+}
+
+data class DreamIdRequest(
+    val id: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("id", id)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = DreamIdRequest(
+            id = o.optString("id"),
+        )
+    }
+}
+
+data class DreamRemoveResponse(
+    val removed: NeoDreamInfo? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = DreamRemoveResponse(
+            removed = o.optJSONObject("removed")?.let { NeoDreamInfo.fromJson(it) },
+        )
+        fun parse(s: String): DreamRemoveResponse = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoToolAnimation(
+    val tool: String = "",
+    val label: String = "",
+    val w: Int = 0,
+    val h: Int = 0,
+    val palette: Map<String, String> = emptyMap(),
+    val frames: List<List<String>> = emptyList(),
+    val fps: Int = 0,
+    val createdBy: String = "",
+    val at: Long = 0L,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoToolAnimation(
+            tool = o.optString("tool"),
+            label = o.optString("label"),
+            w = o.optInt("w"),
+            h = o.optInt("h"),
+            palette = o.optJSONObject("palette")?.let { m -> m.keys().asSequence().associateWith { m.optString(it) } } ?: emptyMap(),
+            frames = o.optJSONArray("frames")?.let { a -> (0 until a.length()).mapNotNull { i0 -> a.optJSONArray(i0)?.let { a0 -> (0 until a0.length()).map { a0.optString(it) } } } } ?: emptyList(),
+            fps = o.optInt("fps"),
+            createdBy = o.optString("createdBy"),
+            at = o.optLong("at"),
+        )
+        fun parse(s: String): NeoToolAnimation = fromJson(try { JSONObject(s) } catch (_: Exception) { JSONObject() })
+    }
+}
+
+data class NeoAnimationInfo(
+    val tool: String = "",
+    val label: String = "",
+    val w: Int = 0,
+    val h: Int = 0,
+    val frames: Int = 0,
+    val fps: Int = 0,
+    val createdBy: String = "",
+    val at: Long = 0L,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = NeoAnimationInfo(
+            tool = o.optString("tool"),
+            label = o.optString("label"),
+            w = o.optInt("w"),
+            h = o.optInt("h"),
+            frames = o.optInt("frames"),
+            fps = o.optInt("fps"),
+            createdBy = o.optString("createdBy"),
+            at = o.optLong("at"),
+        )
+        fun parseList(s: String): List<NeoAnimationInfo> = try { org.json.JSONArray(s).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { fromJson(it) } } } catch (_: Exception) { emptyList() }
+    }
+}
+
+data class AnimationRefRequest(
+    val tool: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().also { j ->
+        j.put("tool", tool)
+    }
+    fun toJson(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromJson(o: JSONObject) = AnimationRefRequest(
+            tool = o.optString("tool"),
         )
     }
 }
@@ -153,7 +1285,8 @@ sealed class ServerEvent(val type: String) {
     data object Armed : ServerEvent("armed")
     data object ListenEnd : ServerEvent("listen_end")
     data class Thinking(val text: String = "") : ServerEvent("thinking")
-    data class Tool(val name: String = "") : ServerEvent("tool")
+    data class Tool(val name: String = "", val key: String = "", val animation: NeoToolAnimation? = null) : ServerEvent("tool")
+    data class AnimationChanged(val tool: String = "", val animation: NeoToolAnimation? = null) : ServerEvent("animation")
     data class CardShown(val card: Card? = null) : ServerEvent("card")
     data object Askerr : ServerEvent("askerr")
     data object Cancelled : ServerEvent("cancelled")
@@ -168,6 +1301,15 @@ sealed class ServerEvent(val type: String) {
     data object DreamFail : ServerEvent("dream_fail")
     data class Idle(val idle: IdleSettings = IdleSettings()) : ServerEvent("idle")
     data class Face(val theme: FaceTheme = FaceTheme()) : ServerEvent("face")
+    data class SettingsChanged(val settings: NeoSettings = NeoSettings()) : ServerEvent("settings")
+    data class ProviderChanged(val name: String = "", val label: String = "") : ServerEvent("provider")
+    data class ModelChanged(val name: String = "", val model: String? = null, val id: String? = null) : ServerEvent("model")
+    data class WakeChanged(val name: String = "", val variants: List<String> = emptyList()) : ServerEvent("wake")
+    data class Training(val name: String = "", val n: Int = 0, val text: String = "") : ServerEvent("train")
+    data object DevicesChanged : ServerEvent("devices")
+    data object JobsChanged : ServerEvent("jobs")
+    data class JobsWarning(val problems: List<NeoJobProblem> = emptyList()) : ServerEvent("jobs_warning")
+    data class FileChanged(val file: String = "", val day: String = "", val id: String = "") : ServerEvent("changed")
     /** A type the app does not react to (or does not know). */
     data class Unknown(val raw: String) : ServerEvent(raw)
 
@@ -186,7 +1328,8 @@ sealed class ServerEvent(val type: String) {
                 "armed" -> Armed
                 "listen_end" -> ListenEnd
                 "thinking" -> Thinking(o.optString("text"))
-                "tool" -> Tool(o.optString("name"))
+                "tool" -> Tool(o.optString("name"), o.optString("key"), if (o.isNull("animation")) null else o.optJSONObject("animation")?.let { NeoToolAnimation.fromJson(it) })
+                "animation" -> AnimationChanged(o.optString("tool"), if (o.isNull("animation")) null else o.optJSONObject("animation")?.let { NeoToolAnimation.fromJson(it) })
                 "card" -> CardShown(o.optJSONObject("card")?.let { try { Card.fromJson(it) } catch (_: Exception) { null } })
                 "askerr" -> Askerr
                 "cancelled" -> Cancelled
@@ -201,6 +1344,15 @@ sealed class ServerEvent(val type: String) {
                 "dream_fail" -> DreamFail
                 "idle" -> Idle(IdleSettings.fromJson(o))
                 "face" -> Face(FaceTheme.fromJson(o))
+                "settings" -> SettingsChanged(NeoSettings.fromJson(o))
+                "provider" -> ProviderChanged(o.optString("name"), o.optString("label"))
+                "model" -> ModelChanged(o.optString("name"), if (o.isNull("model")) null else o.optString("model"), if (o.isNull("id")) null else o.optString("id"))
+                "wake" -> WakeChanged(o.optString("name"), o.optJSONArray("variants")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList())
+                "train" -> Training(o.optString("name"), o.optInt("n"), o.optString("text"))
+                "devices" -> DevicesChanged
+                "jobs" -> JobsChanged
+                "jobs_warning" -> JobsWarning(o.optJSONArray("problems")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NeoJobProblem.fromJson(it) } } ?: emptyList())
+                "changed" -> FileChanged(o.optString("file"), o.optString("day"), o.optString("id"))
                 else -> Unknown(t)
             }
         }

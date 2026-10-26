@@ -23,6 +23,7 @@ class SetupActivity : Activity() {
     private lateinit var host: EditText
     private lateinit var code: EditText
     private lateinit var pairBtn: Button
+    private var neo: NeoSection? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +44,10 @@ class SetupActivity : Activity() {
             background = GradientDrawable().apply { setColor(if (primary) Face.FG else 0x00000000); setStroke(dp(1), Face.FG); cornerRadius = dp(10).toFloat() }
         }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(24), dp(28), dp(24), dp(28)); setBackgroundColor(Face.BG) }
+        if (cfg.token.isNotEmpty()) { // จับคู่แล้ว: คุม Neo บน Mac ได้จากตรงนี้ (ส่วนจับคู่/ที่อยู่ Mac อยู่ข้างล่าง)
+            neo = NeoSection(this, cfg.base, cfg.token) { startActivity(Intent(this, SetupActivity::class.java).putExtra("why", "Mac ยกเลิกการจับคู่เครื่องนี้แล้ว — จับคู่ใหม่")); Config.savePairing(this, cfg.base, ""); finish() }
+            col.addView(neo!!.view)
+        }
         col.addView(text("ตั้งค่า Neo", 26f, bold = true))
         intent.getStringExtra("why")?.let { col.addView(text(it, 15f, 0xFFFFB38A.toInt())) }
         col.addView(text("1. บน Mac เปิด Neo.app แล้วกด \"จับคู่มือถือ\" — จะขึ้นรหัส 6 หลักและที่อยู่ที่ใช้ได้\n2. ใส่ที่อยู่แบบไหนก็ได้ที่มือถือนี้ไปถึง Mac:\n   • Tailscale/VPN: my-mac.tailnet.ts.net หรือ 100.x.x.x\n   • Wi-Fi เดียวกัน: 192.168.x.x (เปิดใน Neo.app ก่อน)\n   • URL ของคุณเอง: https://neo.example.com\n3. ใส่รหัส แล้วกดจับคู่", 15f, 0xFFB9C4BF.toInt()))
@@ -65,6 +70,9 @@ class SetupActivity : Activity() {
         setContentView(ScrollView(this).apply { setBackgroundColor(Face.BG); addView(col) })
         window.decorView.setBackgroundColor(Face.BG)
     }
+
+    override fun onResume() { super.onResume(); neo?.start() }
+    override fun onPause() { neo?.stop(); super.onPause() }
 
     private fun say(t: String) = runOnUiThread { status.text = t }
 

@@ -310,3 +310,15 @@ test('a tap while thinking changes nothing; a tap window that ran out does not a
   expect(await t.conversation.hear('ราคาทองวันนี้')).toEqual({ outcome: 'heard', armed: false })
   expect(t.asks).toHaveLength(1)
 })
+
+test('the tool event carries the key and the stored animation (null while none is drawn yet)', async () => {
+  const stored = { tool: 'WebSearch', label: 'WebSearch', w: 24, h: 24, palette: { a: '#ffffff' }, frames: [['a']], fps: 4, createdBy: 'x', at: 1 }
+  const t = setup({ toolAnimation: (name: string) => ({ key: name, animation: name === 'WebSearch' ? stored : null }) })
+  const outcome = t.conversation.hear('นีโอ ราคาทองวันนี้เท่าไหร่')
+  await tick()
+  t.asks[0]!.onTool('Bash', '{}')
+  t.asks[0]!.onTool('WebSearch', '{}')
+  t.asks[0]!.answer(card('ok'))
+  await outcome
+  expect(t.log.filter(e => e.type === 'tool')).toMatchObject([{ name: 'Bash', key: 'Bash', animation: null }, { name: 'WebSearch', key: 'WebSearch', animation: stored }])
+})
